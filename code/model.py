@@ -27,9 +27,11 @@ class SpaceModel(mesa.Model):
         }
 
         self.tasks = [
-            Task(pickup=self.grid[(2,2)], dropoff=self.grid[(8,8)]),
-            Task(pickup=self.grid[(1,7)], dropoff=self.grid[(6,1)]),
-            Task(pickup=self.grid[(7,2)], dropoff=self.grid[(4,8)]),
+            Task(self.grid[(2, 2)], self.grid[(8, 8)]),
+            Task(self.grid[(1, 7)], self.grid[(6, 1)]),
+            Task(self.grid[(7, 2)], self.grid[(4, 8)]),
+            Task(self.grid[(8, 1)], self.grid[(2, 6)]),
+            Task(self.grid[(5, 1)], self.grid[(9, 9)]),
         ]
 
         self.agents = []
@@ -61,7 +63,14 @@ class SpaceModel(mesa.Model):
 
             for x in range(self.grid.width):
                 cell = self.grid[(x, y)]
-                if cell == self.agent.cell:
+
+                agent_here = False
+                for agent in self.agents:
+                    if agent.cell == cell:
+                        agent_here = True
+                        break
+
+                if agent_here:
                     row += "A "
                 elif cell in self.blocked_cells:
                     row += "# "
@@ -90,5 +99,5 @@ class SpaceModel(mesa.Model):
     def is_done(self):
         return(
             not self.tasks
-            and self.agent.task is None
+            and all(agent.task is None for agent in self.agents)
         )
