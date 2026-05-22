@@ -2,11 +2,10 @@ from model import SpaceModel
 
 model = SpaceModel(10, 10)
 
-step_count = 0
+max_steps = 100
 
-while not model.is_done():
+for step_count in range(max_steps):
     print(f"Step {step_count}")
     model.step()
-    step_count += 1
-    
-print(f"Finished in {step_count} steps")
+
+print(f"Finished after {max_steps} steps")

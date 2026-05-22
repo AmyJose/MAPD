@@ -136,7 +136,7 @@ class SpaceModel(mesa.Model):
 
         print(
             f"New task generated: pickup {pickup.coordinate},"
-            f"dropodd {dropoff.coordinate}"
+            f"dropoff {dropoff.coordinate}"
         )
 
     def is_done(self):
