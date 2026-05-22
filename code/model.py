@@ -76,3 +76,9 @@ class SpaceModel(mesa.Model):
             f"Assigned task: pickup {next_task.pickup.coordinate}, "
             f"dropoff {next_task.dropoff.coordinate}"
         )
+
+    def is_done(self):
+        return(
+            not self.tasks
+            and self.agent.task is None
+        )
