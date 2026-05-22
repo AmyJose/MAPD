@@ -34,7 +34,7 @@ class SpaceModel(mesa.Model):
             Task(self.grid[(5, 1)], self.grid[(9, 9)]),
         ]
 
-        self.agents = []
+        self.workers = []
 
         start_positions = [
             (0, 0),
@@ -43,11 +43,11 @@ class SpaceModel(mesa.Model):
         ]
 
         for pos in start_positions:
-            agent = Agent(self)
-            agent.move_to(self.grid[pos])
+            worker = Agent(self)
+            worker.move_to(self.grid[pos])
 
-            self.agents.append(agent)
-            self.assign_next_task(agent)
+            self.workers.append(worker)
+            self.assign_next_task(worker)
 
     def step(self):
         """Advance by one step"""
@@ -58,28 +58,37 @@ class SpaceModel(mesa.Model):
     def print_grid(self):
         print()
 
+        active_pickups = {
+            worker.task.pickup
+            for worker in self.workers
+            if worker.task is not None
+        }
+
+        active_dropoffs = {
+            worker.task.dropoff
+            for worker in self.workers
+            if worker.task is not None
+        }
+
         for y in reversed(range(self.grid.height)):
             row = ""
 
             for x in range(self.grid.width):
                 cell = self.grid[(x, y)]
 
-                agent_here = False
-                for agent in self.agents:
-                    if agent.cell == cell:
-                        agent_here = True
-                        break
+                agent_here = any(worker.cell == cell for worker in self.workers)
 
                 if agent_here:
                     row += "A "
                 elif cell in self.blocked_cells:
                     row += "# "
-                elif self.agent.task and cell == self.agent.task.pickup:
+                elif cell in active_pickups:
                     row += "P "
-                elif self.agent.task and cell == self.agent.task.dropoff:
+                elif cell in active_dropoffs:
                     row += "D "
                 else:
                     row += ". "
+
             print(row)
 
         print("-" * 20)
@@ -99,5 +108,5 @@ class SpaceModel(mesa.Model):
     def is_done(self):
         return(
             not self.tasks
-            and all(agent.task is None for agent in self.agents)
+            and all(worker.task is None for worker in self.workers)
         )
