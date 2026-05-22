@@ -7,3 +7,7 @@ class PickupMarker(CellAgent):
 class DropoffMarker(CellAgent):
     def step(self):
         pass
+    
+class BlockedCellMarker(CellAgent):
+    def step(self):
+        pass

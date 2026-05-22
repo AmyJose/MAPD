@@ -6,7 +6,7 @@ import mesa
 from mesa.discrete_space import OrthogonalVonNeumannGrid
 from agent import WorkerAgent
 from dataclasses import dataclass
-from markers import PickupMarker, DropoffMarker
+from markers import PickupMarker, DropoffMarker, BlockedCellMarker
 
 #what a task is:
 @dataclass
@@ -26,6 +26,9 @@ class SpaceModel(mesa.Model):
             self.grid[(3,4)],
             self.grid[(3, 5)],
         }
+        for cell in self.blocked_cells:
+            marker = BlockedCellMarker(self)
+            marker.move_to(cell)
 
         self.task_spawn_probability = 0.2
         self.max_tasks_waiting = 5
