@@ -2,7 +2,7 @@
 
 A small Python/Mesa project exploring the foundations of Multi-Agent Pickup and Delivery (MAPD).
 
-This currently implements a simple grid world where multiple agents are assigned pickup and drop-off tasks from a shared task queue. Agents use **A\* search** to plan routes through an orthogonal Von Neumann grid and move one cell at a time until all tasks have been completed.
+This currently implements a simple grid world where multiple agents are dynamically assigned pickup and drop-off tasks from a shared task queue. Tasks are generated during simulation runtime, and agents use**A* search** to plan routes through an orthogonal Von Neumann grid.
 
 ## Features
 - Mesa-based agent simulation
@@ -12,6 +12,7 @@ This currently implements a simple grid world where multiple agents are assigned
 - A* pathfinding
 - Static obstacle cells
 - Shared FIFO task queue
+- Dynamic task generation
 - Multiple independent agents
 - Randomised agent activation using Mesa ``shuffle_do()``
 - Automatic task assignment
@@ -40,7 +41,7 @@ dropoff
 ```
 Agents first plan a path from their current cell to the pickup location using A*. Once the pickup location is reached, the agent replans from the pickup cell to the drop-off location.
 
-Tasks are stored in a shared FIFO queue. When an agent completes a task, the next available task is automatically assigned until no tasks remain.
+Tasks are dynamically generated during runtime and stored in a shared FIFO queue. Free agents automatically request the next available task from the queue. Once a task is completed, the agent becomes available to receive another task.
 
 Agents are activated each simulation step using Mesa’s ``shuffle_do()`` method to reduce sequencing bias caused by fixed update ordering.
 
@@ -52,25 +53,26 @@ This is an early toy implementation. It currently supports:
 - independent A* planning
 - no collision avoidance
 - no task allocation strategies
-- no dynamic replanning
+- no collision detection
 - no cooperative planning
 - agents may occupy the same cell simultaneously
 
 ### Future Work
 Planned extensions include:
-- dynamic task generation
 - task allocation strategies
 - collision detection
 - collision avoidance
 - reservation tables
-- time-aware A*
+- space-time aware A*
+- random obstacle generation
+- token passing
 - cooperative pathfinding
 - prioritised planning
-- visualisation using Mesa's brower interface
+- visualisation using Mesa's browser interface
 - comparison of MAPD algorithms
 
 ### Motivation
-The aim of this project is to build up grdually towards a working MAPD simulation, starting from the smallest useful components: grid movement, task assignment and path planning
+The aim of this project is to build up gradually towards a working MAPD simulation, starting from the smallest useful components: grid movement, task assignment and path planning
 
 The project is intended as a learning exercise in:
 
