@@ -26,13 +26,20 @@ class SpaceModel(mesa.Model):
             self.grid[(3, 5)],
         }
 
-        self.tasks = [
-            Task(self.grid[(2, 2)], self.grid[(8, 8)]),
-            Task(self.grid[(1, 7)], self.grid[(6, 1)]),
-            Task(self.grid[(7, 2)], self.grid[(4, 8)]),
-            Task(self.grid[(8, 1)], self.grid[(2, 6)]),
-            Task(self.grid[(5, 1)], self.grid[(9, 9)]),
+        self.task_spawn_probability = 0.2
+        self.max_tasks_waiting = 5
+        self.task_endpoints = [
+            self.grid[(2, 2)],
+            self.grid[(8, 8)],
+            self.grid[(1, 7)],
+            self.grid[(6, 1)],
+            self.grid[(7, 2)],
+            self.grid[(4, 8)],
+            self.grid[(8, 1)],
+            self.grid[(2, 6)],
         ]
+
+        self.tasks = []
 
         self.workers = []
 
@@ -47,10 +54,15 @@ class SpaceModel(mesa.Model):
             worker.move_to(self.grid[pos])
 
             self.workers.append(worker)
-            self.assign_next_task(worker)
 
     def step(self):
         """Advance by one step"""
+        self.maybe_generate_task()
+
+        for worker in self.workers:
+            if worker.task is None:
+                self.assign_next_task(worker)
+
         self.agents.shuffle_do("step")
         self.print_grid()
 
@@ -103,6 +115,28 @@ class SpaceModel(mesa.Model):
         print(
             f"Assigned task: pickup {next_task.pickup.coordinate}, "
             f"dropoff {next_task.dropoff.coordinate}"
+        )
+
+    # task generator
+    def maybe_generate_task(self):
+        if len(self.tasks) >= self.max_tasks_waiting:
+            return
+
+        if self.random.random() > self.task_spawn_probability:
+            return
+        
+        pickup = self.random.choice(self.task_endpoints)
+        dropoff = self.random.choice(self.task_endpoints)
+
+        while dropoff == pickup:
+            dropoff = self.random.choice(self.task_endpoints)
+
+        task = Task(pickup=pickup, dropoff=dropoff)
+        self.tasks.append(task)
+
+        print(
+            f"New task generated: pickup {pickup.coordinate},"
+            f"dropodd {dropoff.coordinate}"
         )
 
     def is_done(self):
