@@ -2,7 +2,7 @@
 
 A small Python/Mesa project exploring the foundations of Multi-Agent Pickup and Delivery (MAPD).
 
-This currently implements a simple grid world where a robot agent is assigned a queue of pickup and drop-off tasks. The agent uses **A\* search** to plan a route through an orthogonal Von Neumann grid and moves one cell at a time until all tasks have been completed.
+This currently implements a simple grid world where multiple agents are assigned pickup and drop-off tasks from a shared task queue. Agents use **A\* search** to plan routes through an orthogonal Von Neumann grid and move one cell at a time until all tasks have been completed.
 
 ## Features
 - Mesa-based agent simulation
@@ -11,8 +11,9 @@ This currently implements a simple grid world where a robot agent is assigned a 
 - Von Neumann neighbourhood movement
 - A* pathfinding
 - Static obstacle cells
-- Pickup and drop-off task system
-- Task queue support
+- Shared FIFO task queue
+- Multiple independent agents
+- Randomised agent activation using Mesa ``shuffle_do()``
 - Automatic task assignment
 - Console-based grid visualisation
 
@@ -37,29 +38,34 @@ Each task contains
 pickup
 dropoff
 ```
-The agent first plans a path from its current cell to the pickup location using A*. Once the pickup location is reached, the agent replans from the pickup cell to the drop-off location.
+Agents first plan a path from their current cell to the pickup location using A*. Once the pickup location is reached, the agent replans from the pickup cell to the drop-off location.
 
-Tasks are stored in a queue. When a task is completed, the next available task is automatically assigned to the agent until no tasks remain.
+Tasks are stored in a shared FIFO queue. When an agent completes a task, the next available task is automatically assigned until no tasks remain.
+
+Agents are activated each simulation step using Mesa’s ``shuffle_do()`` method to reduce sequencing bias caused by fixed update ordering.
 
 ### Current Limitations
 This is an early toy implementation. It currently supports:
-- one agent
-- FIFO task queue
+- multiple agents
+- shared FIFO task queue
 - static obstacles
+- independent A* planning
 - no collision avoidance
 - no task allocation strategies
 - no dynamic replanning
-- no multi-agent coordination
+- no cooperative planning
+- agents may occupy the same cell simultaneously
 
 ### Future Work
 Planned extensions include:
-- multiple agents
 - dynamic task generation
 - task allocation strategies
+- collision detection
 - collision avoidance
 - reservation tables
 - time-aware A*
 - cooperative pathfinding
+- prioritised planning
 - visualisation using Mesa's brower interface
 - comparison of MAPD algorithms
 

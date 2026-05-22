@@ -4,7 +4,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import mesa
 from mesa.discrete_space import OrthogonalVonNeumannGrid
-from agent import Agent
+from agent import WorkerAgent
 from dataclasses import dataclass
 
 #what a task is:
@@ -43,7 +43,7 @@ class SpaceModel(mesa.Model):
         ]
 
         for pos in start_positions:
-            worker = Agent(self)
+            worker = WorkerAgent(self)
             worker.move_to(self.grid[pos])
 
             self.workers.append(worker)
