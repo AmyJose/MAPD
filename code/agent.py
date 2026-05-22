@@ -86,3 +86,6 @@ class Agent(CellAgent):
             print("[agent] Task complete!")
             self.task = None
             self.carrying = False
+            self.path = []
+
+            self.model.assign_next_task(self)
