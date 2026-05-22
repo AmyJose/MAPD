@@ -26,16 +26,26 @@ class SpaceModel(mesa.Model):
             self.grid[(3, 5)],
         }
 
-        self.agent = Agent(self)
-        self.agent.move_to(self.grid[(0, 0)])
-
         self.tasks = [
             Task(pickup=self.grid[(2,2)], dropoff=self.grid[(8,8)]),
             Task(pickup=self.grid[(1,7)], dropoff=self.grid[(6,1)]),
             Task(pickup=self.grid[(7,2)], dropoff=self.grid[(4,8)]),
         ]
 
-        self.assign_next_task(self.agent)
+        self.agents = []
+
+        start_positions = [
+            (0, 0),
+            (0, 1),
+            (1, 0),
+        ]
+
+        for pos in start_positions:
+            agent = Agent(self)
+            agent.move_to(self.grid[pos])
+
+            self.agents.append(agent)
+            self.assign_next_task(agent)
 
     def step(self):
         """Advance by one step"""
