@@ -1,8 +1,6 @@
 from model import SpaceModel
-from agent import Agent
-import mesa
 
-model = SpaceModel(1, 10, 10)
+model = SpaceModel(10, 10)
 
-for _ in range(10):
+for _ in range(30):
     model.step()
