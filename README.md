@@ -28,7 +28,7 @@ D = drop-off location
 ```
 
 ## How it works
-The model creates a 2D orthogonal Von Neumann grid, meaining agents can move in four directions: up, down, left and right.
+The model creates a 2D orthogonal Von Neumann grid, meaning agents can move in four directions: up, down, left and right.
 
 A task contains
 ``` bash 
