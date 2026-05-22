@@ -2,7 +2,7 @@
 
 A small Python/Mesa project exploring the foundations of Multi-Agent Pickup and Delivery (MAPD).
 
-This currently implements a simple grid world where multiple agents are dynamically assigned pickup and drop-off tasks from a shared task queue. Tasks are generated during simulation runtime, and agents use**A* search** to plan routes through an orthogonal Von Neumann grid.
+This project currently implements a simple grid world where multiple agents are dynamically assigned pickup and drop-off tasks from a shared task queue. Tasks are generated during simulation runtime, and agents use **A\*** search to plan routes through an orthogonal Von Neumann grid.
 
 ## Features
 - Mesa-based agent simulation
@@ -16,25 +16,35 @@ This currently implements a simple grid world where multiple agents are dynamica
 - Multiple independent agents
 - Randomised agent activation using Mesa ``shuffle_do()``
 - Automatic task assignment
-- Console-based grid visualisation
+- Browser-based visualisation using Mesa SolaraViz
+- Visual pickup/drop-off markers
+- Visual obstacle rendering
 
 ## Running the simulation
-``` bash
+### Console based
+```bash
 python code/run.py
 ```
-The console output shows the grid at each step:
-``` bash
-A = agent
-P = pickup location
-D = drop-off location
-# = blocked cell
-. = empty cell
+### Browser Visualisation
+```bash
+solara run code/app.py
 ```
+Then open:
+```bash
+http://localhost:8765
+```
+The browser interface displays:
+- worker agents
+- pickup locations
+- drop-off locations
+- blocked cells
+- live agent movement during simulation
+
 
 ## How it works
 The model creates a 2D orthogonal Von Neumann grid, meaning agents can move in four directions: up, down, left and right.
 
-Each task contains
+Each task contains:
 ``` bash 
 pickup
 dropoff
@@ -55,6 +65,7 @@ This is an early toy implementation. It currently supports:
 - no task allocation strategies
 - no collision detection
 - no cooperative planning
+- no visualisation of planned paths
 - agents may occupy the same cell simultaneously
 
 ### Future Work
@@ -68,11 +79,10 @@ Planned extensions include:
 - token passing
 - cooperative pathfinding
 - prioritised planning
-- visualisation using Mesa's browser interface
 - comparison of MAPD algorithms
 
 ### Motivation
-The aim of this project is to build up gradually towards a working MAPD simulation, starting from the smallest useful components: grid movement, task assignment and path planning
+The aim of this project is to build up gradually towards a working MAPD simulation, starting from the smallest useful components: grid movement, task assignment and path planning.
 
 The project is intended as a learning exercise in:
 
