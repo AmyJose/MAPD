@@ -55,7 +55,7 @@ def a_star(start, goal, blocked_cells = None):
     return path
 
 
-class Agent(CellAgent):
+class WorkerAgent(CellAgent):
     """An agent that can move around a grid"""
     def __init__(self, model):
         super().__init__(model)
