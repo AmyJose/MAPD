@@ -6,6 +6,7 @@ import mesa
 from mesa.discrete_space import OrthogonalVonNeumannGrid
 from agent import WorkerAgent
 from dataclasses import dataclass
+from markers import PickupMarker, DropoffMarker, BlockedCellMarker
 
 #what a task is:
 @dataclass
@@ -25,6 +26,9 @@ class SpaceModel(mesa.Model):
             self.grid[(3,4)],
             self.grid[(3, 5)],
         }
+        for cell in self.blocked_cells:
+            marker = BlockedCellMarker(self)
+            marker.move_to(cell)
 
         self.task_spawn_probability = 0.2
         self.max_tasks_waiting = 5
@@ -64,7 +68,7 @@ class SpaceModel(mesa.Model):
                 self.assign_next_task(worker)
 
         self.agents.shuffle_do("step")
-        self.print_grid()
+        #self.print_grid()
 
     #code from CHAT GPT to better visualise
     def print_grid(self):
@@ -112,6 +116,12 @@ class SpaceModel(mesa.Model):
         
         next_task = self.tasks.pop(0)
         agent.assign_task(next_task)
+
+        pickup_marker = PickupMarker(self)
+        pickup_marker.move_to(next_task.pickup)
+        dropoff_marker = DropoffMarker(self)
+        dropoff_marker.move_to(next_task.dropoff)
+
         print(
             f"Assigned task: pickup {next_task.pickup.coordinate}, "
             f"dropoff {next_task.dropoff.coordinate}"
