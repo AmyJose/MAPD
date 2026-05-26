@@ -101,7 +101,7 @@ class WorkerAgent(CellAgent):
 
             if self.task.dropoff_marker is not None:
                 self.task.dropoff_marker.remove()
-                self.task.dropodd_marker = None
+                self.task.dropoff_marker = None
 
             self.task = None
             self.carrying = False

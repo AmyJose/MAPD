@@ -39,6 +39,9 @@ class SpaceModel(mesa.Model):
         self.completed_tasks = 0
         self.generated_tasks = 0
 
+        self.reserved_cells = {}
+        self.reserved_edges = {}
+
         self.start_cells = self.generate_random_cells(self.num_workers)
         for i, cell in enumerate(self.start_cells):
             worker = WorkerAgent(self, worker_id=i)
@@ -129,6 +132,17 @@ class SpaceModel(mesa.Model):
                         f"{a_start.coordinate} <-> {a_end.coordinate} "
                         f"between {worker_a.worker_id} and {worker_b.worker_id}"
                     )   
+    
+    # goes through the path and reserves edges at the time they appear
+    def reserve_path(self, worker, path, start_time):
+        previous_cell = worker.cell
+
+        for i, cell in enumerate(path):
+            timestep = start_time + i + 1
+            self.reserved_cells[(cell, timestep)] = worker
+            self.reserved_edges[(previous_cell, cell, timestep)] = worker
+
+            previous_cell = cell
 
     def assign_next_task(self, agent):
         if not self.tasks:
@@ -241,3 +255,13 @@ class SpaceModel(mesa.Model):
         reachable_cells = self.get_reachable_cells(first_cell, blocked_cells)
 
         return important_cells.issubset(reachable_cells)
+
+    def is_cell_reserved(self, cell, timestep):
+        return (cell, timestep) in self.reserved_cells
+    
+    def is_edge_reserved(self, from_cell, to_cell, timestep):
+        return (from_cell, to_cell, timestep) in self.reserved_edges
+    
+    def would_swap_edges(self, from_cell, to_cell, timestep):
+        return (to_cell, from_cell, timestep) in self.reserved_edges
+    
