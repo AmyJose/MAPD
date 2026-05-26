@@ -65,6 +65,8 @@ class SpaceModel(mesa.Model):
         }
         self.maybe_generate_task()
 
+        self.reserve_idle_workers(self.steps)
+        
         for worker in self.workers:
             if worker.task is None:
                 self.assign_next_task(worker)
@@ -134,7 +136,7 @@ class SpaceModel(mesa.Model):
                     )   
     
     # goes through the path and reserves edges at the time they appear
-    def reserve_path(self, worker, path, start_time):
+    def reserve_path(self, worker, path, start_time, goal_reserve_horizon=20):
         previous_cell = worker.cell
 
         for i, cell in enumerate(path):
@@ -143,6 +145,18 @@ class SpaceModel(mesa.Model):
             self.reserved_edges[(previous_cell, cell, timestep)] = worker
 
             previous_cell = cell
+
+        #keep the final cell reserved for a bit after arrival
+        #stops another agent planning into a workers end immediately after the path ends
+        if path:
+            final_cell = path[-1]
+        else:
+            final_cell = worker.cell
+
+        final_time = start_time + len(path)
+
+        for t in range(final_time + 1, final_time + goal_reserve_horizon +1):
+            self.reserved_cells[(final_cell, t)] = worker
 
     def assign_next_task(self, agent):
         if not self.tasks:
@@ -223,6 +237,24 @@ class SpaceModel(mesa.Model):
         
         return self.random.sample(available_cells, count)
     
+    def clear_reservations_for(self, worker):
+        self.reserved_cells = {
+            key: value
+            for key, value in self.reserved_cells.items()
+            if value is not worker
+        }
+        self.reserved_edges = {
+            key: value
+            for key, value in self.reserved_edges.items()
+            if value is not worker
+        }
+
+    def reserve_idle_workers(self, start_time, horizon=20):
+        for worker in self.workers:
+            if worker.task is None:
+                for t in range(start_time + 1, start_time + horizon + 1):
+                    self.reserved_cells[(worker.cell, t)] = worker
+    
     #DFS to ensure all tasks are connected
     def get_reachable_cells(self, start_cell, blocked_cells):
         visited = set()
@@ -256,12 +288,14 @@ class SpaceModel(mesa.Model):
 
         return important_cells.issubset(reachable_cells)
 
-    def is_cell_reserved(self, cell, timestep):
-        return (cell, timestep) in self.reserved_cells
+    def is_cell_reserved(self, cell, timestep, worker=None):
+        reserved_by=self.reserved_cells.get((cell, timestep))
+        return reserved_by is not None and reserved_by is not worker
     
     def is_edge_reserved(self, from_cell, to_cell, timestep):
         return (from_cell, to_cell, timestep) in self.reserved_edges
     
-    def would_swap_edges(self, from_cell, to_cell, timestep):
-        return (to_cell, from_cell, timestep) in self.reserved_edges
+    def would_swap_edges(self, from_cell, to_cell, timestep, worker=None):
+        reserved_by= self.reserved_edges.get((to_cell, from_cell, timestep))
+        return reserved_by is not None and reserved_by is not worker
     
