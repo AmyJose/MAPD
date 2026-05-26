@@ -58,11 +58,12 @@ def a_star(start, goal, blocked_cells = None):
 
 class WorkerAgent(CellAgent):
     """An agent that can move around a grid"""
-    def __init__(self, model):
+    def __init__(self, model, worker_id):
         super().__init__(model)
         self.task = None
         self.path = []
         self.carrying = False
+        self.worker_id = worker_id
     
     def assign_task(self, task):
         self.task = task
@@ -88,12 +89,15 @@ class WorkerAgent(CellAgent):
             dropoff_marker = DropoffMarker(self.model)
             dropoff_marker.move_to(self.task.dropoff)
             self.task.dropoff_marker = dropoff_marker
-            
+
             self.path = a_star(self.cell, self.task.dropoff, self.model.blocked_cells)
             return
         
         if self.carrying and self.cell == self.task.dropoff:
-            print("[agent] Task complete!")
+            print(
+                f"Worker {self.worker_id} completed task"
+            )
+            self.model.completed_tasks += 1
 
             if self.task.dropoff_marker is not None:
                 self.task.dropoff_marker.remove()

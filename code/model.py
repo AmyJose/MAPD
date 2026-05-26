@@ -33,9 +33,15 @@ class SpaceModel(mesa.Model):
 
         self.workers = []
 
+        self.vertex_collisions = 0
+        self.edge_collisions = 0
+
+        self.completed_tasks = 0
+        self.generated_tasks = 0
+
         self.start_cells = self.generate_random_cells(self.num_workers)
-        for cell in self.start_cells:
-            worker = WorkerAgent(self)
+        for i, cell in enumerate(self.start_cells):
+            worker = WorkerAgent(self, worker_id=i)
             worker.move_to(cell)
             self.workers.append(worker)
 
@@ -48,6 +54,12 @@ class SpaceModel(mesa.Model):
 
     def step(self):
         """Advance by one step"""
+
+        #keep track of the previous positions of all agents
+        previous_positions = {
+            worker: worker.cell
+            for worker in self.workers
+        }
         self.maybe_generate_task()
 
         for worker in self.workers:
@@ -55,46 +67,68 @@ class SpaceModel(mesa.Model):
                 self.assign_next_task(worker)
 
         self.agents.shuffle_do("step")
-        #self.print_grid()
+        
+        self.detect_collisions(previous_positions)
 
-    #code from CHAT GPT to better visualise
-    def print_grid(self):
-        print()
+    def detect_collisions(self, previous_positions):
+        self.detect_vertex_collisions()
+        self.detect_edge_collisions(previous_positions)
 
-        active_pickups = {
-            worker.task.pickup
-            for worker in self.workers
-            if worker.task is not None
-        }
+    def detect_vertex_collisions(self):
+        #dictionary holding all worker positions
+        #structure: [x, y] : worker
+        occupied = {}
+        for worker in self.workers:
+            cell = worker.cell
+            if cell not in occupied:
+                occupied[cell] = [worker]
+            else:
+                occupied[cell].append(worker)
 
-        active_dropoffs = {
-            worker.task.dropoff
-            for worker in self.workers
-            if worker.task is not None
-        }
+        #loop through and checkkk
+        # if a cell [x, y] has more than one entry, there is collision
+        for cell, workers in occupied.items():
+            if len(workers)> 1:
+                self.vertex_collisions += 1
+                worker_ids = [worker.worker_id for worker in workers]
 
-        for y in reversed(range(self.grid.height)):
-            row = ""
+                print(
+                    f"Vertex collision at {cell.coordinate}: "
+                    f"workers {worker_ids}"
+                )
+    
+    # edge swaps!
+    def detect_edge_collisions(self, previous_positions):
+        moves = {}
+        for worker in self.workers:
+            start = previous_positions[worker]
+            end = worker.cell
+            moves[worker] = (start, end)
 
-            for x in range(self.grid.width):
-                cell = self.grid[(x, y)]
+        #avoid double counting
+        checked_pairs = set()
 
-                agent_here = any(worker.cell == cell for worker in self.workers)
+        for worker_a, move_a in moves.items():
+            for worker_b, move_b in moves.items():
+                if worker_a == worker_b:
+                    continue
 
-                if agent_here:
-                    row += "A "
-                elif cell in self.blocked_cells:
-                    row += "# "
-                elif cell in active_pickups:
-                    row += "P "
-                elif cell in active_dropoffs:
-                    row += "D "
-                else:
-                    row += ". "
+                pair = frozenset({worker_a, worker_b})
 
-            print(row)
+                if pair in checked_pairs:
+                    continue
 
-        print("-" * 20)
+                a_start, a_end = move_a
+                b_start, b_end = move_b
+
+                if a_start == b_end and b_start == a_end:
+                    self.edge_collisions += 1
+
+                    print(
+                        f"Edge collision: "
+                        f"{a_start.coordinate} <-> {a_end.coordinate} "
+                        f"between {worker_a.worker_id} and {worker_b.worker_id}"
+                    )   
 
     def assign_next_task(self, agent):
         if not self.tasks:
@@ -109,8 +143,9 @@ class SpaceModel(mesa.Model):
         next_task.pickup_marker = pickup_marker
 
         print(
-            f"Assigned task: pickup {next_task.pickup.coordinate}, "
-            f"dropoff {next_task.dropoff.coordinate}"
+            f"Worker {agent.worker_id} assigned task: "
+            f"{next_task.pickup.coordinate} -> "
+            f"{next_task.dropoff.coordinate}"
         )
 
     # task generator
@@ -129,16 +164,11 @@ class SpaceModel(mesa.Model):
 
         task = Task(pickup=pickup, dropoff=dropoff)
         self.tasks.append(task)
+        self.generated_tasks += 1
 
         print(
             f"New task generated: pickup {pickup.coordinate},"
             f"dropoff {dropoff.coordinate}"
-        )
-
-    def is_done(self):
-        return(
-            not self.tasks
-            and all(worker.task is None for worker in self.workers)
         )
     
     def generate_valid_blocked_cells(self, forbidden=None, max_attempts=100):
