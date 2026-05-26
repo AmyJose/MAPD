@@ -123,6 +123,8 @@ class SpaceModel(mesa.Model):
                 if pair in checked_pairs:
                     continue
 
+                checked_pairs.add(pair)
+
                 a_start, a_end = move_a
                 b_start, b_end = move_b
 
@@ -136,7 +138,7 @@ class SpaceModel(mesa.Model):
                     )   
     
     # goes through the path and reserves edges at the time they appear
-    def reserve_path(self, worker, path, start_time, goal_reserve_horizon=20):
+    def reserve_path(self, worker, path, start_time, goal_reserve_horizon=2):
         previous_cell = worker.cell
 
         for i, cell in enumerate(path):

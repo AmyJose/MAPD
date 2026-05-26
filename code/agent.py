@@ -15,7 +15,7 @@ def heuristic(a, b):
 
 #a star function for shortest path finding between two points
 # now changed to also care about TIME: what is the shortest route that is free at each timestep
-def a_star(start, goal, start_time, model, max_time=100):
+def a_star(start, goal, start_time, model, worker, max_time=100):
     frontier = []
     heapq.heappush(frontier, (0, start.coordinate, start_time, start))
 
@@ -42,10 +42,10 @@ def a_star(start, goal, start_time, model, max_time=100):
             if next_cell in model.blocked_cells:
                 continue
 
-            if model.is_cell_reserved(next_cell, next_time):
+            if model.is_cell_reserved(next_cell, next_time, worker):
                 continue
 
-            if model.would_swap_edges(current_cell, next_cell, next_time):
+            if model.would_swap_edges(current_cell, next_cell, next_time, worker):
                 continue
 
             state = (next_cell, next_time)
@@ -94,18 +94,33 @@ class WorkerAgent(CellAgent):
         self.worker_id = worker_id
     
     def assign_task(self, task):
+        self.model.clear_reservations_for(self)
+
+        path = a_star(
+            start=self.cell, 
+            goal=task.pickup, 
+            start_time=self.model.steps,
+            worker=self,
+            model=self.model
+        )
+
+        #check if a path wasnt found
+        if not path and self.cell != task.pickup:
+            print(f"Worker {self.worker_id} could not find a path to pickup")
+            self.task = None
+            return False
+
         self.task = task
         self.carrying = False
-        self.path = a_star(start=self.cell, 
-                           goal=task.pickup, 
-                           start_time=self.model.steps, 
-                           model=self.model)
+        self.path = path
 
         self.model.reserve_path(
             worker=self,
             path=self.path,
             start_time=self.model.steps
         )
+
+        return True
 
     def step(self):
         if self.task is None:
@@ -127,10 +142,13 @@ class WorkerAgent(CellAgent):
             dropoff_marker.move_to(self.task.dropoff)
             self.task.dropoff_marker = dropoff_marker
 
+            self.model.clear_reservations_for(self)
+
             self.path = a_star(
                 start=self.cell, 
                 goal=self.task.dropoff, 
                 start_time=self.model.steps,
+                worker=self,
                 model=self.model
             )
 
