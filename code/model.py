@@ -21,14 +21,11 @@ class SpaceModel(mesa.Model):
         super().__init__(seed=seed)
         self.grid = OrthogonalVonNeumannGrid((width, height), torus=False, random=self.random)
 
-        self.blocked_cells = {
-            self.grid[(3, 3)],
-            self.grid[(3,4)],
-            self.grid[(3, 5)],
-        }
-        for cell in self.blocked_cells:
-            marker = BlockedCellMarker(self)
-            marker.move_to(cell)
+        self.blocked_spawn_probability = 0.15
+        self.num_workers = 3
+        self.num_task_endpoints = 8
+
+        self.blocked_cells = self.generate_blocked_cells()
 
         self.task_spawn_probability = 0.2
         self.max_tasks_waiting = 5
@@ -154,3 +151,14 @@ class SpaceModel(mesa.Model):
             not self.tasks
             and all(worker.task is None for worker in self.workers)
         )
+    
+    def generate_blocked_cells(self):
+        blocked_cells = set()
+
+        for cell in self.grid.all_cells:
+            if self.random.random() < self.obstacle_probability:
+                blocked_cells.add(cell)
+                marker = BlockedCellMarker(self)
+                marker.move_to(cell)
+
+        return blocked_cells
