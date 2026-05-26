@@ -1,31 +1,31 @@
 # MAPD Toy Model
 
 A small Python/Mesa project exploring the foundations of Multi-Agent Pickup and Delivery (MAPD).
+This project implements a dynamic grid-based multi-agent environment where workers are assigned pickup and drop-off tasks generated during simulation runtime. Agents use **A\*** search to navigate an orthogonal Von Neumann grid while interacting with dynamically generated tasks and randomly generated obstacle layouts.
 
-This project currently implements a simple grid world where multiple agents are dynamically assigned pickup and drop-off tasks from a shared task queue. Tasks are generated during simulation runtime, and agents use **A\*** search to plan routes through an orthogonal Von Neumann grid.
+The project is being developed incrementally towards a full MAPF/MAPD implementation inspired by Token Passing approaches
 
 ## Features
 - Mesa-based agent simulation
-- ``CellAgent`` implementation
-- ``OrthogonalVonNeumannGrid`` 
+- CellAgent implementation
+- OrthogonalVonNeumannGrid
 - Von Neumann neighbourhood movement
 - A* pathfinding
-- Static obstacle cells
+- Multiple independent worker agents
+- Dynamic runtime task generation
 - Shared FIFO task queue
-- Dynamic task generation
-- Multiple independent agents
-- Randomised agent activation using Mesa ``shuffle_do()``
+- Randomised worker activation using Mesa shuffle_do()
+- Random obstacle generation
+- Connectivity validation for generated maps
 - Automatic task assignment
-- Browser-based visualisation using Mesa SolaraViz
-- Visual pickup/drop-off markers
+- Browser visualisation using Mesa SolaraViz
 - Visual obstacle rendering
+- Dynamic pickup/drop-off visualisation
+- Console execution support
 
 ## Running the simulation
-### Console based
-```bash
-python code/run.py
-```
-### Browser Visualisation
+### Browser Visualisation (Recommended)
+Run the Solara application:
 ```bash
 solara run code/app.py
 ```
@@ -35,38 +35,52 @@ http://localhost:8765
 ```
 The browser interface displays:
 - worker agents
-- pickup locations
-- drop-off locations
+- active pickup locations
+- active drop-off locations
 - blocked cells
-- live agent movement during simulation
+- live agent movement
+
+### Console Mode
+```bash
+python code/run.py
+```
 
 
 ## How it works
-The model creates a 2D orthogonal Von Neumann grid, meaning agents can move in four directions: up, down, left and right.
+The environment is represented as a 2D orthogonal Von Neumann grid, meaning agents can move in four directions: up, down, left and right.
 
 Each task contains:
 ``` bash 
 pickup
 dropoff
 ```
-Agents first plan a path from their current cell to the pickup location using A*. Once the pickup location is reached, the agent replans from the pickup cell to the drop-off location.
+Tasks are generated dynamically during runtime and stored in a shared FIFO task queue.
 
-Tasks are dynamically generated during runtime and stored in a shared FIFO queue. Free agents automatically request the next available task from the queue. Once a task is completed, the agent becomes available to receive another task.
+Free agents automatically request the next available task. Agents first plan a route from their current location to the pickup cell using **A\*** search. Once the pickup location is reached, the agent replans from the pickup cell to the drop-off location.
 
-Agents are activated each simulation step using Mesa’s ``shuffle_do()`` method to reduce sequencing bias caused by fixed update ordering.
+Agents are activated using Mesa’s ``shuffle_do()`` method to reduce sequencing bias caused by fixed update ordering.
+
+Obstacle layouts are generated randomly while ensuring that all important cells (worker start locations and task endpoints) remain reachable.
 
 ### Current Limitations
-This is an early toy implementation. It currently supports:
+This is still an early MAPD implementation. The current implementation includes:
 - multiple agents
 - shared FIFO task queue
 - static obstacles
 - independent A* planning
-- no collision avoidance
-- no task allocation strategies
+- dynamic task generation
+- browser visualisation
+
+The following limitations still exist:
 - no collision detection
+- no collision avoidance
+- no reservation table
+- no space-time planning
 - no cooperative planning
+- no task allocation strategies
 - no visualisation of planned paths
 - agents may occupy the same cell simultaneously
+- agents may perform edge swaps
 
 ### Future Work
 Planned extensions include:
