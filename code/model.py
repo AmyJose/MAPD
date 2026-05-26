@@ -13,6 +13,8 @@ from markers import PickupMarker, DropoffMarker, BlockedCellMarker
 class Task:
     pickup: tuple[int, int]
     dropoff: tuple [int,int]
+    pickup_marker: object = None
+    dropoff_marker: object = None
 
 class SpaceModel(mesa.Model):
     """a model containing some number of agents that move around a grid"""
@@ -104,8 +106,7 @@ class SpaceModel(mesa.Model):
 
         pickup_marker = PickupMarker(self)
         pickup_marker.move_to(next_task.pickup)
-        dropoff_marker = DropoffMarker(self)
-        dropoff_marker.move_to(next_task.dropoff)
+        next_task.pickup_marker = pickup_marker
 
         print(
             f"Assigned task: pickup {next_task.pickup.coordinate}, "
