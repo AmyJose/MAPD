@@ -39,7 +39,7 @@ class SpaceModel(mesa.Model):
 
         self.task_endpoints = self.generate_random_cells(self.num_task_endpoints, forbidden=set(self.start_cells))
 
-        self.blocked_cells = self.generate_blocked_cells(forbidden = set(self.start_cells) | set(self.task_endpoints))
+        self.blocked_cells = self.generate_valid_blocked_cells(forbidden = set(self.start_cells) | set(self.task_endpoints))
         for cell in self.blocked_cells:
             block = BlockedCellMarker(self)
             block.move_to(cell)
@@ -140,6 +140,18 @@ class SpaceModel(mesa.Model):
             and all(worker.task is None for worker in self.workers)
         )
     
+    def generate_valid_blocked_cells(self, forbidden=None, max_attempts=100):
+        forbidden = forbidden or set()
+        for _ in range(max_attempts):
+            blocked_cells = self.generate_blocked_cells(forbidden=forbidden)
+
+            if self.is_connected_for_problem(blocked_cells):
+                return blocked_cells
+        raise RuntimeError(
+            "Could not generate a connected obstacle layout. "
+            "Try reducing obstacle_probability."
+        )
+
     def generate_blocked_cells(self, forbidden=None):
         forbidden = forbidden or set()
 
@@ -166,3 +178,35 @@ class SpaceModel(mesa.Model):
         
         return self.random.sample(available_cells, count)
     
+    #DFS to ensure all tasks are connected
+    def get_reachable_cells(self, start_cell, blocked_cells):
+        visited = set()
+        frontier = [start_cell]
+
+        while frontier:
+            current = frontier.pop()
+
+            if current in visited:
+                continue
+
+            visited.add(current)
+
+            for neighbour in current.neighborhood:
+                if neighbour in blocked_cells:
+                    continue
+
+                if neighbour not in visited:
+                    frontier.append(neighbour)
+
+        return visited
+    
+    def is_connected_for_problem(self, blocked_cells):
+        important_cells = set(self.start_cells) | set(self.task_endpoints)
+
+        if not important_cells:
+            return True
+        
+        first_cell = next(iter(important_cells))
+        reachable_cells = self.get_reachable_cells(first_cell, blocked_cells)
+
+        return important_cells.issubset(reachable_cells)
