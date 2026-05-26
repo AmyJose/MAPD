@@ -40,8 +40,8 @@ class SpaceModel(mesa.Model):
         self.generated_tasks = 0
 
         self.start_cells = self.generate_random_cells(self.num_workers)
-        for cell in self.start_cells:
-            worker = WorkerAgent(self)
+        for i, cell in enumerate(self.start_cells):
+            worker = WorkerAgent(self, worker_id=i)
             worker.move_to(cell)
             self.workers.append(worker)
 
@@ -91,9 +91,11 @@ class SpaceModel(mesa.Model):
         for cell, workers in occupied.items():
             if len(workers)> 1:
                 self.vertex_collisions += 1
+                worker_ids = [worker.worker_id for worker in workers]
+
                 print(
                     f"Vertex collision at {cell.coordinate}: "
-                    f"{len(workers)} agents"
+                    f"workers {worker_ids}"
                 )
     
     # edge swaps!
@@ -125,7 +127,8 @@ class SpaceModel(mesa.Model):
 
                     print(
                         f"Edge collision: "
-                        f"{a_start.coordinate} <-> {a_end.coordinate}"
+                        f"{a_start.coordinate} <-> {a_end.coordinate} "
+                        f"between {worker_a.worker_id} and {worker_b.worker_id}"
                     )   
 
     #code from CHAT GPT to better visualise
@@ -180,8 +183,9 @@ class SpaceModel(mesa.Model):
         next_task.pickup_marker = pickup_marker
 
         print(
-            f"Assigned task: pickup {next_task.pickup.coordinate}, "
-            f"dropoff {next_task.dropoff.coordinate}"
+            f"Worker {agent.worker_id} assigned task: "
+            f"{next_task.pickup.coordinate} -> "
+            f"{next_task.dropoff.coordinate}"
         )
 
     # task generator
