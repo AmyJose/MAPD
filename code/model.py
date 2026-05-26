@@ -65,7 +65,7 @@ class SpaceModel(mesa.Model):
 
         self.agents.shuffle_do("step")
         
-        self.detection_collisions(previous_positions)
+        self.detect_collisions(previous_positions)
         #self.print_grid()
 
     def detect_collisions(self, previous_positions):

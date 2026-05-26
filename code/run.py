@@ -9,3 +9,6 @@ for step_count in range(max_steps):
     model.step()
 
 print(f"Finished after {max_steps} steps")
+
+print(f"Vertex collisions: {model.vertex_collisions}")
+print(f"Edge collisions: {model.edge_collisions}")
