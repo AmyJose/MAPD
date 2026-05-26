@@ -156,7 +156,7 @@ class SpaceModel(mesa.Model):
         blocked_cells = set()
 
         for cell in self.grid.all_cells:
-            if self.random.random() < self.obstacle_probability:
+            if self.random.random() < self.blocked_spawn_probability:
                 blocked_cells.add(cell)
                 marker = BlockedCellMarker(self)
                 marker.move_to(cell)
