@@ -13,6 +13,8 @@ from markers import PickupMarker, DropoffMarker, BlockedCellMarker
 class Task:
     pickup: tuple[int, int]
     dropoff: tuple [int,int]
+    pickup_marker: object = None
+    dropoff_marker: object = None
 
 class SpaceModel(mesa.Model):
     """a model containing some number of agents that move around a grid"""
@@ -21,43 +23,28 @@ class SpaceModel(mesa.Model):
         super().__init__(seed=seed)
         self.grid = OrthogonalVonNeumannGrid((width, height), torus=False, random=self.random)
 
-        self.blocked_cells = {
-            self.grid[(3, 3)],
-            self.grid[(3,4)],
-            self.grid[(3, 5)],
-        }
-        for cell in self.blocked_cells:
-            marker = BlockedCellMarker(self)
-            marker.move_to(cell)
-
+        self.blocked_spawn_probability = 0.15
+        self.num_workers = 3
+        self.num_task_endpoints = 8
         self.task_spawn_probability = 0.2
         self.max_tasks_waiting = 5
-        self.task_endpoints = [
-            self.grid[(2, 2)],
-            self.grid[(8, 8)],
-            self.grid[(1, 7)],
-            self.grid[(6, 1)],
-            self.grid[(7, 2)],
-            self.grid[(4, 8)],
-            self.grid[(8, 1)],
-            self.grid[(2, 6)],
-        ]
 
         self.tasks = []
 
         self.workers = []
 
-        start_positions = [
-            (0, 0),
-            (0, 1),
-            (1, 0),
-        ]
-
-        for pos in start_positions:
+        self.start_cells = self.generate_random_cells(self.num_workers)
+        for cell in self.start_cells:
             worker = WorkerAgent(self)
-            worker.move_to(self.grid[pos])
-
+            worker.move_to(cell)
             self.workers.append(worker)
+
+        self.task_endpoints = self.generate_random_cells(self.num_task_endpoints, forbidden=set(self.start_cells))
+
+        self.blocked_cells = self.generate_valid_blocked_cells(forbidden = set(self.start_cells) | set(self.task_endpoints))
+        for cell in self.blocked_cells:
+            block = BlockedCellMarker(self)
+            block.move_to(cell)
 
     def step(self):
         """Advance by one step"""
@@ -119,8 +106,7 @@ class SpaceModel(mesa.Model):
 
         pickup_marker = PickupMarker(self)
         pickup_marker.move_to(next_task.pickup)
-        dropoff_marker = DropoffMarker(self)
-        dropoff_marker.move_to(next_task.dropoff)
+        next_task.pickup_marker = pickup_marker
 
         print(
             f"Assigned task: pickup {next_task.pickup.coordinate}, "
@@ -154,3 +140,74 @@ class SpaceModel(mesa.Model):
             not self.tasks
             and all(worker.task is None for worker in self.workers)
         )
+    
+    def generate_valid_blocked_cells(self, forbidden=None, max_attempts=100):
+        forbidden = forbidden or set()
+        for _ in range(max_attempts):
+            blocked_cells = self.generate_blocked_cells(forbidden=forbidden)
+
+            if self.is_connected_for_problem(blocked_cells):
+                return blocked_cells
+        raise RuntimeError(
+            "Could not generate a connected obstacle layout. "
+            "Try reducing obstacle_probability."
+        )
+
+    def generate_blocked_cells(self, forbidden=None):
+        forbidden = forbidden or set()
+
+        blocked_cells = set()
+
+        for cell in self.grid.all_cells:
+            if cell in forbidden:
+                continue
+            if self.random.random() < self.blocked_spawn_probability:
+                blocked_cells.add(cell)
+
+        return blocked_cells
+    
+    def generate_random_cells(self, count, forbidden=None):
+        forbidden = forbidden or set()
+
+        available_cells = [
+            cell for cell in self.grid.all_cells
+            if cell not in forbidden
+        ]
+
+        if count > len(available_cells):
+            raise ValueError("Not enough available cells to sample from")
+        
+        return self.random.sample(available_cells, count)
+    
+    #DFS to ensure all tasks are connected
+    def get_reachable_cells(self, start_cell, blocked_cells):
+        visited = set()
+        frontier = [start_cell]
+
+        while frontier:
+            current = frontier.pop()
+
+            if current in visited:
+                continue
+
+            visited.add(current)
+
+            for neighbour in current.neighborhood:
+                if neighbour in blocked_cells:
+                    continue
+
+                if neighbour not in visited:
+                    frontier.append(neighbour)
+
+        return visited
+    
+    def is_connected_for_problem(self, blocked_cells):
+        important_cells = set(self.start_cells) | set(self.task_endpoints)
+
+        if not important_cells:
+            return True
+        
+        first_cell = next(iter(important_cells))
+        reachable_cells = self.get_reachable_cells(first_cell, blocked_cells)
+
+        return important_cells.issubset(reachable_cells)

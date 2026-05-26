@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import mesa
 from mesa.discrete_space import CellAgent
 import heapq
+from markers import DropoffMarker
 
 #manhattan distance
 def heuristic(a, b):
@@ -79,11 +80,25 @@ class WorkerAgent(CellAgent):
         
         if not self.carrying and self.cell == self.task.pickup:
             self.carrying = True
+
+            if self.task.pickup_marker is not None:
+                self.task.pickup_marker.remove()
+                self.task.pickup_marker = None
+
+            dropoff_marker = DropoffMarker(self.model)
+            dropoff_marker.move_to(self.task.dropoff)
+            self.task.dropoff_marker = dropoff_marker
+            
             self.path = a_star(self.cell, self.task.dropoff, self.model.blocked_cells)
             return
         
         if self.carrying and self.cell == self.task.dropoff:
             print("[agent] Task complete!")
+
+            if self.task.dropoff_marker is not None:
+                self.task.dropoff_marker.remove()
+                self.task.dropodd_marker = None
+
             self.task = None
             self.carrying = False
             self.path = []
