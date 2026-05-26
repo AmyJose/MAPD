@@ -36,6 +36,9 @@ class SpaceModel(mesa.Model):
         self.vertex_collisions = 0
         self.edge_collisions = 0
 
+        self.completed_tasks = 0
+        self.generated_tasks = 0
+
         self.start_cells = self.generate_random_cells(self.num_workers)
         for cell in self.start_cells:
             worker = WorkerAgent(self)
@@ -197,6 +200,7 @@ class SpaceModel(mesa.Model):
 
         task = Task(pickup=pickup, dropoff=dropoff)
         self.tasks.append(task)
+        self.generated_tasks += 1
 
         print(
             f"New task generated: pickup {pickup.coordinate},"
