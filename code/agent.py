@@ -14,43 +14,71 @@ def heuristic(a, b):
     return abs(ax-bx) + abs(ay-by)
 
 #a star function for shortest path finding between two points
-def a_star(start, goal, blocked_cells = None):
-    blocked_cells = blocked_cells or set()
-
+# now changed to also care about TIME: what is the shortest route that is free at each timestep
+def a_star(start, goal, start_time, model, max_time=100):
     frontier = []
-    heapq.heappush(frontier, (0, start.coordinate, start))
+    heapq.heappush(frontier, (0, start.coordinate, start_time, start))
 
     #dictionarys for lookup
-    came_from = {start: None}
-    current_cost = {start: 0}
+    came_from = {(start, start_time): None}
+    current_cost = {(start, start_time): 0}
 
     while frontier:
-        _, _, current = heapq.heappop(frontier)
+        _, _, current_time, current_cell = heapq.heappop(frontier)
 
-        if current == goal:
+        if current_cell == goal:
             break
 
-        for neighbour in current.neighborhood:
-            if neighbour in blocked_cells:
+        if current_time - start_time >= max_time:
+            continue
+
+        neighbours = list(current_cell.neighborhood)
+        # WAIT action -> adding in the current cell as an option
+        neighbours.append(current_cell)
+
+        for next_cell in neighbours:
+            next_time = current_time + 1
+
+            if next_cell in model.blocked_cells:
                 continue
 
-            new_cost = current_cost[current] + 1
+            if model.is_cell_reserved(next_cell, next_time):
+                continue
 
-            if neighbour not in current_cost or new_cost < current_cost[neighbour]:
-                current_cost[neighbour] = new_cost
-                priority = new_cost +  heuristic(neighbour, goal)
-                heapq.heappush(frontier, (priority, neighbour.coordinate, neighbour))
-                came_from[neighbour] = current
+            if model.would_swap_edges(current_cell, next_cell, next_time):
+                continue
 
-    if goal not in came_from:
+            state = (next_cell, next_time)
+            new_cost = current_cost[(current_cell, current_time)] + 1
+
+            if state not in current_cost or new_cost < current_cost[state]:
+                current_cost[state] = new_cost
+
+                priority = new_cost +  heuristic(next_cell, goal)
+
+                heapq.heappush(frontier, (priority, next_cell.coordinate, next_time, next_cell))
+                came_from[state] = (current_cell, current_time)
+
+    #states where the final entry is one that reaches the goal
+    goal_states = [
+        state for state in came_from
+        if state[0] == goal
+    ]
+
+    if not goal_states:
         return []
     
+    #which is the best state?
+    # the shortest one!
+    best_goal_state = min(goal_states, key=lambda state: state[1])
+    
     path = []
-    current = goal
+    current_state = best_goal_state
 
-    while current != start:
-        path.append(current)
-        current = came_from[current]
+    while current_state != (start, start_time):
+        cell, _ = current_state
+        path.append(cell)
+        current_state = came_from[current_state]
     
     path.reverse()
     return path
@@ -68,7 +96,16 @@ class WorkerAgent(CellAgent):
     def assign_task(self, task):
         self.task = task
         self.carrying = False
-        self.path = a_star(self.cell, task.pickup, self.model.blocked_cells,)
+        self.path = a_star(start=self.cell, 
+                           goal=task.pickup, 
+                           start_time=self.model.steps, 
+                           model=self.model)
+
+        self.model.reserve_path(
+            worker=self,
+            path=self.path,
+            start_time=self.model.steps
+        )
 
     def step(self):
         if self.task is None:
@@ -90,7 +127,19 @@ class WorkerAgent(CellAgent):
             dropoff_marker.move_to(self.task.dropoff)
             self.task.dropoff_marker = dropoff_marker
 
-            self.path = a_star(self.cell, self.task.dropoff, self.model.blocked_cells)
+            self.path = a_star(
+                start=self.cell, 
+                goal=self.task.dropoff, 
+                start_time=self.model.steps,
+                model=self.model
+            )
+
+            self.model.reserve_path(
+                worker=self,
+                path=self.path,
+                start_time=self.model.steps
+            )
+
             return
         
         if self.carrying and self.cell == self.task.dropoff:
