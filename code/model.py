@@ -69,7 +69,6 @@ class SpaceModel(mesa.Model):
         self.agents.shuffle_do("step")
         
         self.detect_collisions(previous_positions)
-        #self.print_grid()
 
     def detect_collisions(self, previous_positions):
         self.detect_vertex_collisions()
@@ -131,45 +130,6 @@ class SpaceModel(mesa.Model):
                         f"between {worker_a.worker_id} and {worker_b.worker_id}"
                     )   
 
-    #code from CHAT GPT to better visualise
-    def print_grid(self):
-        print()
-
-        active_pickups = {
-            worker.task.pickup
-            for worker in self.workers
-            if worker.task is not None
-        }
-
-        active_dropoffs = {
-            worker.task.dropoff
-            for worker in self.workers
-            if worker.task is not None
-        }
-
-        for y in reversed(range(self.grid.height)):
-            row = ""
-
-            for x in range(self.grid.width):
-                cell = self.grid[(x, y)]
-
-                agent_here = any(worker.cell == cell for worker in self.workers)
-
-                if agent_here:
-                    row += "A "
-                elif cell in self.blocked_cells:
-                    row += "# "
-                elif cell in active_pickups:
-                    row += "P "
-                elif cell in active_dropoffs:
-                    row += "D "
-                else:
-                    row += ". "
-
-            print(row)
-
-        print("-" * 20)
-
     def assign_next_task(self, agent):
         if not self.tasks:
             print("No tasks left!")
@@ -209,12 +169,6 @@ class SpaceModel(mesa.Model):
         print(
             f"New task generated: pickup {pickup.coordinate},"
             f"dropoff {dropoff.coordinate}"
-        )
-
-    def is_done(self):
-        return(
-            not self.tasks
-            and all(worker.task is None for worker in self.workers)
         )
     
     def generate_valid_blocked_cells(self, forbidden=None, max_attempts=100):
