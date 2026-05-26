@@ -33,6 +33,9 @@ class SpaceModel(mesa.Model):
 
         self.workers = []
 
+        self.vertex_collisions = 0
+        self.edge_collisions = 0
+
         self.start_cells = self.generate_random_cells(self.num_workers)
         for cell in self.start_cells:
             worker = WorkerAgent(self)
@@ -48,6 +51,12 @@ class SpaceModel(mesa.Model):
 
     def step(self):
         """Advance by one step"""
+
+        #keep track of the previous positions of all agents
+        previous_positions = {
+            worker: worker.cell
+            for worker in self.workers
+        }
         self.maybe_generate_task()
 
         for worker in self.workers:
@@ -55,7 +64,66 @@ class SpaceModel(mesa.Model):
                 self.assign_next_task(worker)
 
         self.agents.shuffle_do("step")
+        
+        self.detection_collisions(previous_positions)
         #self.print_grid()
+
+    def detect_collisions(self, previous_positions):
+        self.detect_vertex_collisions()
+        self.detect_edge_collisions(previous_positions)
+
+    def detect_vertex_collisions(self):
+        #dictionary holding all worker positions
+        #structure: [x, y] : worker
+        occupied = {}
+        for worker in self.workers:
+            cell = worker.cell
+            if cell not in occupied:
+                occupied[cell] = [worker]
+            else:
+                occupied[cell].append(worker)
+
+        #loop through and checkkk
+        # if a cell [x, y] has more than one entry, there is collision
+        for cell, workers in occupied.items():
+            if len(workers)> 1:
+                self.vertex_collisions += 1
+                print(
+                    f"Vertex collision at {cell.coordinate}: "
+                    f"{len(workers)} agents"
+                )
+    
+    # edge swaps!
+    def detect_edge_collisions(self, previous_positions):
+        moves = {}
+        for worker in self.workers:
+            start = previous_positions[worker]
+            end = worker.cell
+            moves[worker] = (start, end)
+
+        #avoid double counting
+        checked_pairs = set()
+
+        for worker_a, move_a in moves.items():
+            for worker_b, move_b in moves.items():
+                if worker_a == worker_b:
+                    continue
+
+                pair = frozenset({worker_a, worker_b})
+
+                if pair in checked_pairs:
+                    continue
+
+                a_start, a_end = move_a
+                b_start, b_end = move_b
+
+                if a_start == b_end and b_start == a_end:
+                    self.edge_collisions += 1
+
+                    print(
+                        f"Edge collision: "
+                        f"{a_start.coordinate} <-> {a_end.coordinate}"
+                    )   
 
     #code from CHAT GPT to better visualise
     def print_grid(self):
