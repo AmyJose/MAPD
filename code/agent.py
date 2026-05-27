@@ -1,7 +1,7 @@
 import mesa
 from mesa.discrete_space import CellAgent
 import heapq
-from markers import DropoffMarker, PathMarker
+from markers import DropoffMarker, PathMarker, PickupMarker
 import logging
 logger = logging.getLogger(__name__)
 
@@ -124,6 +124,10 @@ class WorkerAgent(CellAgent):
         self.carrying = False
         self.path = path
         self.create_path_markers()
+
+        pickup_marker = PickupMarker(self.model)
+        pickup_marker.move_to(self.task.pickup)
+        self.task.pickup_marker = pickup_marker
 
         self.model.token.reserve_path(
             worker=self,
