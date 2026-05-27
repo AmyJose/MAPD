@@ -100,16 +100,17 @@ class WorkerAgent(CellAgent):
         self.worker_id = worker_id
         self.path_markers = []
     
-    def assign_task(self, task):
+    def assign_task(self, task, path=None):
         self.model.token.clear_worker(self)
 
-        path = a_star(
-            start=self.cell, 
-            goal=task.pickup, 
-            start_time=self.model.steps,
-            worker=self,
-            model=self.model
-        )
+        if path is None:
+            path = a_star(
+                start=self.cell,
+                goal=task.pickup,
+                start_time=self.model.steps,
+                worker=self,
+                model=self.model
+            )   
 
         #check if a path wasnt found
         if not path and self.cell != task.pickup:
@@ -231,19 +232,59 @@ class WorkerAgent(CellAgent):
             marker.move_to(cell)
             self.path_markers.append(marker)
 
+    def choose_best_task(self, tasks):
+        #use A* to determine the closest pickup location 
+        # (what if this was overall location....)
+        best_cost = float("inf")
+        best_path = None
+        best_task = None
+        for task in tasks:
+            path = a_star(
+                start=self.cell,
+                goal=task.pickup,
+                start_time=self.model.steps,
+                model=self.model,
+                worker=self
+            )
+            if not path and self.cell != task.pickup:
+                continue
+
+            cost = len(path)
+
+            if cost< best_cost:
+                best_cost = cost
+                best_task = task
+                best_path = path
+        return best_task, best_path
+
+
     def request_token(self):
         token = self.model.token
 
         if not token.tasks:
             return
         
-        task = token.tasks.pop(0)
+        #make this smarter!
+        task , path= self.choose_best_task(token.tasks)
 
-        success = self.assign_task(task)
+        if task is None:
+            logger.info(
+                f"Worker {self.worker_id} could not find any reachable task"
+            )
+            return
+        
+        token.tasks.remove(task)
+
+        success = self.assign_task(task, path=path)
 
         if success:
             #record in token that it is a success
             token.assign_task(self, task)
+            logger.info(
+                f"Worker {self.worker_id} claimed closest task: "
+                f"{task.pickup.coordinate} -> {task.dropoff.coordinate}; "
+                f"pickup path length={len(path)}"
+            )
         else:
             #add it back in
-            token.tasks.insert(0, task)
+            token.tasks.append(task)
