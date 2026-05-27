@@ -3,6 +3,7 @@ from mesa.discrete_space import OrthogonalVonNeumannGrid
 from agent import WorkerAgent
 from dataclasses import dataclass
 from markers import PickupMarker, BlockedCellMarker
+from token import Token
 import logging
 
 #what a task is:
@@ -26,20 +27,15 @@ class SpaceModel(mesa.Model):
         self.num_workers = 3
         self.num_task_endpoints = 8
         self.task_spawn_probability = 0.2
-        self.max_tasks_waiting = 5
 
-        self.tasks = []
-
+        self.token = Token()
         self.workers = []
 
+        # model counters
         self.vertex_collisions = 0
         self.edge_collisions = 0
-
         self.completed_tasks = 0
         self.generated_tasks = 0
-
-        self.reserved_cells = {}
-        self.reserved_edges = {}
 
         self.start_cells = self.generate_random_cells(self.num_workers)
         for i, cell in enumerate(self.start_cells):
@@ -210,9 +206,6 @@ class SpaceModel(mesa.Model):
 
     # task generator
     def maybe_generate_task(self):
-        if len(self.tasks) >= self.max_tasks_waiting:
-            return
-
         if self.random.random() > self.task_spawn_probability:
             return
         
@@ -223,7 +216,7 @@ class SpaceModel(mesa.Model):
             dropoff = self.random.choice(self.task_endpoints)
 
         task = Task(pickup=pickup, dropoff=dropoff)
-        self.tasks.append(task)
+        self.token.add_task(task)
         self.generated_tasks += 1
 
         logger.info(

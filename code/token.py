@@ -6,3 +6,6 @@ class Token:
         self.paths = {}
         self.reserved_cells = {}
         self.reserved_edges = {}
+
+    def add_task(self, task):
+        self.tasks.append(task)
