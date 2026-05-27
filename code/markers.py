@@ -18,3 +18,7 @@ class PathMarker(CellAgent):
         self.worker_id = worker_id
     def step(self):
         pass
+
+class ParkingMarker(CellAgent):
+    def step(self):
+        pass

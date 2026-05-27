@@ -144,9 +144,6 @@ class WorkerAgent(CellAgent):
         return True
 
     def step(self):
-        if self.task is None:
-            return
-        
         if self.path:
             current_cell = self.cell
             next_cell = self.path.pop(0)
@@ -158,6 +155,9 @@ class WorkerAgent(CellAgent):
 
             self.move_to(next_cell)
             self.create_path_markers()
+            return
+        
+        if self.task is None:
             return
         
         if not self.carrying and self.cell == self.task.pickup:
@@ -258,10 +258,79 @@ class WorkerAgent(CellAgent):
         return best_task, best_path
 
 
+    def go_to_parking(self):
+        token = self.model.token
+
+        #if already on a task, get oot
+        if self.path:
+            return False
+
+        #find the available parking spots
+        occupied_parking = {
+            worker.cell
+            for worker in self.model.workers
+            if worker is not self
+        }
+
+        available_parking = [
+            cell for cell in self.model.parking_cells
+            if cell not in occupied_parking
+        ]
+
+        if not available_parking:
+            logger.info(f"Worker {self.worker_id} could not find available parking")
+            return False
+        
+        best_cell = None
+        best_path = None
+        best_cost = float("inf")
+
+        for parking_cell in available_parking:
+            path = a_star(
+                start=self.cell,
+                goal=parking_cell,
+                start_time=self.model.steps,
+                model=self.model,
+                worker=self
+            )
+            if not path and self.cell != parking_cell:
+                continue
+
+            cost = len(path)
+
+            if cost < best_cost:
+                best_cost = cost
+                best_cell = parking_cell
+                best_path = path
+        if best_cell is None:
+            logger.info(f"Worker {self.worker_id} could not path to parking")
+            return False
+        
+        token.clear_worker(self)
+
+        self.task = None
+        self.carrying = False
+        self.path = best_path
+
+        token.reserve_path(
+            worker=self,
+            path=self.path,
+            start_time=self.model.steps
+        )
+
+        self.create_path_markers()
+        logger.info(
+            f"Worker {self.worker_id} moving to parking "
+            f"{best_cell.coordinate}; path length={len(best_path)}"
+        )
+        return True
+
+
     def request_token(self):
         token = self.model.token
 
         if not token.tasks:
+            self.go_to_parking()
             return
         
         #make this smarter!
@@ -271,6 +340,7 @@ class WorkerAgent(CellAgent):
             logger.info(
                 f"Worker {self.worker_id} could not find any reachable task"
             )
+            self.go_to_parking()
             return
         
         token.tasks.remove(task)

@@ -1,7 +1,7 @@
 import mesa
 from mesa.discrete_space import OrthogonalVonNeumannGrid
 from agent import WorkerAgent
-from markers import PickupMarker, BlockedCellMarker
+from markers import ParkingMarker, BlockedCellMarker
 from system_token import SystemToken, Task
 import logging
 
@@ -41,7 +41,14 @@ class SpaceModel(mesa.Model):
             block = BlockedCellMarker(self)
             block.move_to(cell)
 
-        
+        self.parking_cells = self.generate_random_cells(
+            count=self.num_workers,
+            forbidden= set(self.start_cells) | set(self.task_endpoints) | set(self.blocked_cells)
+        )
+        for cell in self.parking_cells:
+            park = ParkingMarker(self)
+            park.move_to(cell)
+
         #data collectors for run stats
         self.datacollector = mesa.DataCollector(
             model_reporters={
