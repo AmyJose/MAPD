@@ -3,7 +3,7 @@ import solara
 from mesa.visualization import SolaraViz, make_space_component
 from model import SpaceModel
 from agent import WorkerAgent
-from markers import PickupMarker, DropoffMarker, BlockedCellMarker
+from markers import PickupMarker, DropoffMarker, BlockedCellMarker, PathMarker
 
 
 def agent_portrayal(agent):
@@ -41,6 +41,13 @@ def agent_portrayal(agent):
             "size": 100,
             "marker": "s",
         }
+    
+    if isinstance(agent, PathMarker):
+        return {
+        "color": "lightblue",
+        "size": 25,
+        "marker": ".",
+    }
 
 model = SpaceModel(width=10, height=10)
 

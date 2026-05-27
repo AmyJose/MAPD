@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import mesa
 from mesa.discrete_space import CellAgent
 import heapq
-from markers import DropoffMarker
+from markers import DropoffMarker, PathMarker
 import logging
 
 logger = logging.getLogger(__name__)
@@ -109,6 +109,7 @@ class WorkerAgent(CellAgent):
         self.path = []
         self.carrying = False
         self.worker_id = worker_id
+        self.path_markers = []
     
     def assign_task(self, task):
         self.model.clear_reservations_for(self)
@@ -133,6 +134,7 @@ class WorkerAgent(CellAgent):
         self.task = task
         self.carrying = False
         self.path = path
+        self.create_path_markers()
 
         self.model.reserve_path(
             worker=self,
@@ -161,6 +163,7 @@ class WorkerAgent(CellAgent):
             )
 
             self.move_to(next_cell)
+            self.create_path_markers()
             return
         
         if not self.carrying and self.cell == self.task.pickup:
@@ -194,6 +197,8 @@ class WorkerAgent(CellAgent):
                 path=self.path,
                 start_time=self.model.steps
             )
+
+            self.create_path_markers()
             
             logger.debug(
                 f"Worker {self.worker_id} planned path: "
@@ -208,6 +213,7 @@ class WorkerAgent(CellAgent):
             )
 
             self.model.clear_reservations_for(self)
+            self.clear_path_markers()
             self.model.completed_tasks += 1
 
             if self.task.dropoff_marker is not None:
@@ -219,3 +225,17 @@ class WorkerAgent(CellAgent):
             self.path = []
 
             self.model.assign_next_task(self)
+
+    #helper methods for path markers
+    def clear_path_markers(self):
+        for marker in self.path_markers:
+            marker.remove()
+
+        self.path_markers = []
+
+    def create_path_markers(self):
+        self.clear_path_markers()
+        for cell in self.path:
+            marker = PathMarker(self.model, self.worker_id)
+            marker.move_to(cell)
+            self.path_markers.append(marker)
