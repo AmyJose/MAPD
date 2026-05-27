@@ -6,6 +6,9 @@ import mesa
 from mesa.discrete_space import CellAgent
 import heapq
 from markers import DropoffMarker
+import logging
+
+logger = logging.getLogger(__name__)
 
 #manhattan distance
 def heuristic(a, b):
@@ -43,9 +46,23 @@ def a_star(start, goal, start_time, model, worker, max_time=100):
                 continue
 
             if model.is_cell_reserved(next_cell, next_time, worker):
+                owner = model.reserved_cells.get((next_cell, next_time))
+
+                logger.debug(
+                    f"Worker {worker.worker_id} rejected "
+                    f"{next_cell.coordinate} at t={next_time}; "
+                    f"reserved by worker {owner.worker_id}"
+                )
                 continue
 
             if model.would_swap_edges(current_cell, next_cell, next_time, worker):
+                owner = model.reserved_edges.get((next_cell, current_cell, next_time))
+
+                logger.debug(
+                    f"Worker {worker.worker_id} rejected edge swap "
+                    f"{current_cell.coordinate} -> {next_cell.coordinate} "
+                    f"at t={next_time}; reverse reserved by worker {owner.worker_id}"
+                )
                 continue
 
             state = (next_cell, next_time)
@@ -106,7 +123,10 @@ class WorkerAgent(CellAgent):
 
         #check if a path wasnt found
         if not path and self.cell != task.pickup:
-            print(f"Worker {self.worker_id} could not find a path to pickup")
+            logger.warning(
+                f"Worker {self.worker_id} could not find a path to pickup "
+                f"{task.pickup.coordinate}"
+            )
             self.task = None
             return False
 
@@ -120,6 +140,11 @@ class WorkerAgent(CellAgent):
             start_time=self.model.steps
         )
 
+        logger.debug(
+            f"Worker {self.worker_id} planned pickup path: "
+            f"{[cell.coordinate for cell in self.path]}"
+        )
+
         return True
 
     def step(self):
@@ -127,11 +152,23 @@ class WorkerAgent(CellAgent):
             return
         
         if self.path:
+            current_cell = self.cell
             next_cell = self.path.pop(0)
+
+            logger.debug(
+                f"Worker {self.worker_id} moving "
+                f"{current_cell.coordinate} -> {next_cell.coordinate}"
+            )
+
             self.move_to(next_cell)
             return
         
         if not self.carrying and self.cell == self.task.pickup:
+            logger.info(
+                f"Worker {self.worker_id} reached pickup "
+                f"{self.task.pickup.coordinate}"
+            )
+
             self.carrying = True
 
             if self.task.pickup_marker is not None:
@@ -157,13 +194,20 @@ class WorkerAgent(CellAgent):
                 path=self.path,
                 start_time=self.model.steps
             )
-
+            
+            logger.debug(
+                f"Worker {self.worker_id} planned path: "
+                f"{[cell.coordinate for cell in self.path]}"
+            )
             return
         
         if self.carrying and self.cell == self.task.dropoff:
-            print(
-                f"Worker {self.worker_id} completed task"
+            logger.info(
+                f"Worker {self.worker_id} completed task at "
+                f"{self.task.dropoff.coordinate}"
             )
+
+            self.model.clear_reservations_for(self)
             self.model.completed_tasks += 1
 
             if self.task.dropoff_marker is not None:

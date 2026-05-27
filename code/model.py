@@ -6,7 +6,8 @@ import mesa
 from mesa.discrete_space import OrthogonalVonNeumannGrid
 from agent import WorkerAgent
 from dataclasses import dataclass
-from markers import PickupMarker, DropoffMarker, BlockedCellMarker
+from markers import PickupMarker, BlockedCellMarker
+import logging
 
 #what a task is:
 @dataclass
@@ -16,11 +17,13 @@ class Task:
     pickup_marker: object = None
     dropoff_marker: object = None
 
+logger = logging.getLogger(__name__)
+
 class SpaceModel(mesa.Model):
     """a model containing some number of agents that move around a grid"""
-
     def __init__(self, width = 10, height = 10, seed=None):
         super().__init__(seed=seed)
+
         self.grid = OrthogonalVonNeumannGrid((width, height), torus=False, random=self.random)
 
         self.blocked_spawn_probability = 0.15
@@ -119,9 +122,9 @@ class SpaceModel(mesa.Model):
                 self.vertex_collisions += 1
                 worker_ids = [worker.worker_id for worker in workers]
 
-                print(
-                    f"Vertex collision at {cell.coordinate}: "
-                    f"workers {worker_ids}"
+                logger.warning(
+                    f"[t={self.steps}] Vertex collision at "
+                    f"{cell.coordinate}: workers {worker_ids}"
                 )
     
     # edge swaps!
@@ -153,21 +156,30 @@ class SpaceModel(mesa.Model):
                 if a_start == b_end and b_start == a_end:
                     self.edge_collisions += 1
 
-                    print(
-                        f"Edge collision: "
+                    logger.warning(
+                        f"[t={self.steps}] Edge collision: "
                         f"{a_start.coordinate} <-> {a_end.coordinate} "
                         f"between {worker_a.worker_id} and {worker_b.worker_id}"
-                    )   
+                    )  
     
     # goes through the path and reserves edges at the time they appear
     def reserve_path(self, worker, path, start_time, goal_reserve_horizon=2):
+        logger.debug(
+            f"[t={start_time}] Reserving path for "
+            f"worker {worker.worker_id}"
+        )
         previous_cell = worker.cell
 
         for i, cell in enumerate(path):
             timestep = start_time + i + 1
+
+            logger.debug(
+                f"  reserve cell {cell.coordinate} "
+                f"at t={timestep}"
+            )
+
             self.reserved_cells[(cell, timestep)] = worker
             self.reserved_edges[(previous_cell, cell, timestep)] = worker
-
             previous_cell = cell
 
         #keep the final cell reserved for a bit after arrival
@@ -184,7 +196,6 @@ class SpaceModel(mesa.Model):
 
     def assign_next_task(self, agent):
         if not self.tasks:
-            print("No tasks left!")
             return
         
         next_task = self.tasks.pop(0)
@@ -194,8 +205,9 @@ class SpaceModel(mesa.Model):
         pickup_marker.move_to(next_task.pickup)
         next_task.pickup_marker = pickup_marker
 
-        print(
-            f"Worker {agent.worker_id} assigned task: "
+        logger.info(
+            f"[t={self.steps}] Worker {agent.worker_id} "
+            f"assigned task: "
             f"{next_task.pickup.coordinate} -> "
             f"{next_task.dropoff.coordinate}"
         )
@@ -218,9 +230,9 @@ class SpaceModel(mesa.Model):
         self.tasks.append(task)
         self.generated_tasks += 1
 
-        print(
-            f"New task generated: pickup {pickup.coordinate},"
-            f"dropoff {dropoff.coordinate}"
+        logger.info(
+            f"[t={self.steps}] Generated task: "
+            f"{pickup.coordinate} -> {dropoff.coordinate}"
         )
     
     def generate_valid_blocked_cells(self, forbidden=None, max_attempts=100):
@@ -322,4 +334,17 @@ class SpaceModel(mesa.Model):
     def would_swap_edges(self, from_cell, to_cell, timestep, worker=None):
         reserved_by= self.reserved_edges.get((to_cell, from_cell, timestep))
         return reserved_by is not None and reserved_by is not worker
+    
+    def debug_reservations(self, cell, horizon=10):
+        logger.debug(
+            f"Reservations for {cell.coordinate}:"
+        )
+
+        for t in range(self.steps, self.steps + horizon):
+            owner = self.reserved_cells.get((cell, t))
+
+            if owner is not None:
+                logger.debug(
+                    f"  t={t}: worker {owner.worker_id}"
+                )
     
