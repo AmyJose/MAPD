@@ -213,8 +213,6 @@ class WorkerAgent(CellAgent):
             self.carrying = False
             self.path = []
 
-            #self.model.assign_next_task(self)
-
     #helper methods for path markers
     def clear_path_markers(self):
         for marker in self.path_markers:

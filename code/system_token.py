@@ -56,10 +56,12 @@ class SystemToken:
 
     def is_cell_reserved(self, cell, timestep, worker=None):
         reserved_by=self.reserved_cells.get((cell, timestep))
-        return reserved_by is not None and reserved_by is not worker
+        worker_id = worker.worker_id if worker is not None else None
+        return reserved_by is not None and reserved_by is not worker_id
     
     def would_swap_edges(self, from_cell, to_cell, timestep, worker=None):
         reserved_by= self.reserved_edges.get((to_cell, from_cell, timestep))
-        return reserved_by is not None and reserved_by is not worker
+        worker_id = worker.worker_id if worker is not None else None
+        return reserved_by is not None and reserved_by is not worker_id
     
     

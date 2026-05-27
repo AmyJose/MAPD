@@ -30,3 +30,5 @@ worker_data = agent_data[
 
 model_data.to_csv(output_dir / "model_data.csv")
 worker_data.to_csv(output_dir / "worker_data.csv")
+
+print(f"Run successful! Ouput file location: {output_dir}")

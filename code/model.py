@@ -49,6 +49,7 @@ class SpaceModel(mesa.Model):
                 "Completed Tasks": "completed_tasks",
                 "Waiting Tasks" : lambda m : len(m.token.tasks),
                 "Vertex Collisions": "vertex_collisions",
+                "Edge Collisions": "edge_collisions",
                 "Active Workers": lambda m: sum(worker.task is not None for worker in m.workers),
                 "Idle Workers" : lambda m: sum(worker.task is None for worker in m.workers),
             },
@@ -242,10 +243,10 @@ class SpaceModel(mesa.Model):
         )
 
         for t in range(self.steps, self.steps + horizon):
-            owner = self.reserved_cells.get((cell, t))
+            owner = self.token.reserved_cells.get((cell, t))
 
             if owner is not None:
                 logger.debug(
-                    f"  t={t}: worker {owner.worker_id}"
+                    f"  t={t}: worker {owner}"
                 )
     
