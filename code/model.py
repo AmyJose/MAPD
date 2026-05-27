@@ -55,6 +55,27 @@ class SpaceModel(mesa.Model):
             block = BlockedCellMarker(self)
             block.move_to(cell)
 
+        
+        #data collectors for run stats
+        self.datacollector = mesa.DataCollector(
+            model_reporters={
+                "Generated Tasks": "generated_tasks",
+                "Completed Tasks": "completed_tasks",
+                "Waiting Tasks" : lambda m : len(m.tasks),
+                "Vertex Collisions": "vertex_collisions",
+                "Active Workers": lambda m: sum(worker.task is not None for worker in m.workers),
+                "Idle Workers" : lambda m: sum(worker.task is None for worker in m.workers),
+            },
+            agent_reporters={
+                "Agent Type": lambda a: type(a).__name__,
+                "Worker ID": lambda a: getattr(a, "worker_id", None),
+                "Carrying": lambda a: getattr(a, "carrying", None),
+                "Has Task": lambda a: getattr(a, "task", None) is not None,
+                "Path Length": lambda a: len(getattr(a, "path", [])),
+                "Cell": lambda a: a.cell.coordinate if a.cell else None,
+            }
+        )
+
     def step(self):
         """Advance by one step"""
 
@@ -74,6 +95,7 @@ class SpaceModel(mesa.Model):
         self.agents.shuffle_do("step")
         
         self.detect_collisions(previous_positions)
+        self.datacollector.collect(self)
 
     def detect_collisions(self, previous_positions):
         self.detect_vertex_collisions()

@@ -10,6 +10,16 @@ for step_count in range(max_steps):
 
 print(f"Finished after {max_steps} steps")
 
+model_data = model.datacollector.get_model_vars_dataframe()
+agent_data = model.datacollector.get_agent_vars_dataframe()
+
+worker_data = agent_data[
+    agent_data["Agent Type"] == "WorkerAgent"
+]
+
+print(model_data.tail())
+print(worker_data.tail())
+
 print(f"Generated tasks: {model.generated_tasks}")
 print(f"Completed tasks: {model.completed_tasks}")
 
