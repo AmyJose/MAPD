@@ -1,13 +1,8 @@
-import numpy as np
-import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
 import mesa
 from mesa.discrete_space import CellAgent
 import heapq
-from markers import DropoffMarker, PathMarker
+from markers import DropoffMarker, PathMarker, PickupMarker
 import logging
-
 logger = logging.getLogger(__name__)
 
 #manhattan distance
@@ -45,23 +40,17 @@ def a_star(start, goal, start_time, model, worker, max_time=100):
             if next_cell in model.blocked_cells:
                 continue
 
-            if model.is_cell_reserved(next_cell, next_time, worker):
-                owner = model.reserved_cells.get((next_cell, next_time))
-
+            if model.token.is_cell_reserved(next_cell, next_time, worker):
                 logger.debug(
                     f"Worker {worker.worker_id} rejected "
                     f"{next_cell.coordinate} at t={next_time}; "
-                    f"reserved by worker {owner.worker_id}"
                 )
                 continue
 
-            if model.would_swap_edges(current_cell, next_cell, next_time, worker):
-                owner = model.reserved_edges.get((next_cell, current_cell, next_time))
-
+            if model.token.would_swap_edges(current_cell, next_cell, next_time, worker):
                 logger.debug(
                     f"Worker {worker.worker_id} rejected edge swap "
                     f"{current_cell.coordinate} -> {next_cell.coordinate} "
-                    f"at t={next_time}; reverse reserved by worker {owner.worker_id}"
                 )
                 continue
 
@@ -112,7 +101,7 @@ class WorkerAgent(CellAgent):
         self.path_markers = []
     
     def assign_task(self, task):
-        self.model.clear_reservations_for(self)
+        self.model.token.clear_worker(self)
 
         path = a_star(
             start=self.cell, 
@@ -136,7 +125,11 @@ class WorkerAgent(CellAgent):
         self.path = path
         self.create_path_markers()
 
-        self.model.reserve_path(
+        pickup_marker = PickupMarker(self.model)
+        pickup_marker.move_to(self.task.pickup)
+        self.task.pickup_marker = pickup_marker
+
+        self.model.token.reserve_path(
             worker=self,
             path=self.path,
             start_time=self.model.steps
@@ -182,7 +175,7 @@ class WorkerAgent(CellAgent):
             dropoff_marker.move_to(self.task.dropoff)
             self.task.dropoff_marker = dropoff_marker
 
-            self.model.clear_reservations_for(self)
+            self.model.token.clear_worker(self)
 
             self.path = a_star(
                 start=self.cell, 
@@ -192,7 +185,7 @@ class WorkerAgent(CellAgent):
                 model=self.model
             )
 
-            self.model.reserve_path(
+            self.model.token.reserve_path(
                 worker=self,
                 path=self.path,
                 start_time=self.model.steps
@@ -212,7 +205,7 @@ class WorkerAgent(CellAgent):
                 f"{self.task.dropoff.coordinate}"
             )
 
-            self.model.clear_reservations_for(self)
+            self.model.token.clear_worker(self)
             self.clear_path_markers()
             self.model.completed_tasks += 1
 
@@ -223,8 +216,6 @@ class WorkerAgent(CellAgent):
             self.task = None
             self.carrying = False
             self.path = []
-
-            self.model.assign_next_task(self)
 
     #helper methods for path markers
     def clear_path_markers(self):
@@ -239,3 +230,20 @@ class WorkerAgent(CellAgent):
             marker = PathMarker(self.model, self.worker_id)
             marker.move_to(cell)
             self.path_markers.append(marker)
+
+    def request_token(self):
+        token = self.model.token
+
+        if not token.tasks:
+            return
+        
+        task = token.tasks.pop(0)
+
+        success = self.assign_task(task)
+
+        if success:
+            #record in token that it is a success
+            token.assign_task(self, task)
+        else:
+            #add it back in
+            token.tasks.insert(0, task)

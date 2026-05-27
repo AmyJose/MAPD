@@ -1,21 +1,9 @@
-import numpy as np
-import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
 import mesa
 from mesa.discrete_space import OrthogonalVonNeumannGrid
 from agent import WorkerAgent
-from dataclasses import dataclass
 from markers import PickupMarker, BlockedCellMarker
+from system_token import SystemToken, Task
 import logging
-
-#what a task is:
-@dataclass
-class Task:
-    pickup: tuple[int, int]
-    dropoff: tuple [int,int]
-    pickup_marker: object = None
-    dropoff_marker: object = None
 
 logger = logging.getLogger(__name__)
 
@@ -30,20 +18,15 @@ class SpaceModel(mesa.Model):
         self.num_workers = 3
         self.num_task_endpoints = 8
         self.task_spawn_probability = 0.2
-        self.max_tasks_waiting = 5
 
-        self.tasks = []
-
+        self.token = SystemToken()
         self.workers = []
 
+        # model counters
         self.vertex_collisions = 0
         self.edge_collisions = 0
-
         self.completed_tasks = 0
         self.generated_tasks = 0
-
-        self.reserved_cells = {}
-        self.reserved_edges = {}
 
         self.start_cells = self.generate_random_cells(self.num_workers)
         for i, cell in enumerate(self.start_cells):
@@ -64,8 +47,9 @@ class SpaceModel(mesa.Model):
             model_reporters={
                 "Generated Tasks": "generated_tasks",
                 "Completed Tasks": "completed_tasks",
-                "Waiting Tasks" : lambda m : len(m.tasks),
+                "Waiting Tasks" : lambda m : len(m.token.tasks),
                 "Vertex Collisions": "vertex_collisions",
+                "Edge Collisions": "edge_collisions",
                 "Active Workers": lambda m: sum(worker.task is not None for worker in m.workers),
                 "Idle Workers" : lambda m: sum(worker.task is None for worker in m.workers),
             },
@@ -89,11 +73,11 @@ class SpaceModel(mesa.Model):
         }
         self.maybe_generate_task()
 
-        self.reserve_idle_workers(self.steps)
+        #self.reserve_idle_workers(self.steps)
         
         for worker in self.workers:
             if worker.task is None:
-                self.assign_next_task(worker)
+                worker.request_token()
 
         self.agents.shuffle_do("step")
         
@@ -161,62 +145,9 @@ class SpaceModel(mesa.Model):
                         f"{a_start.coordinate} <-> {a_end.coordinate} "
                         f"between {worker_a.worker_id} and {worker_b.worker_id}"
                     )  
-    
-    # goes through the path and reserves edges at the time they appear
-    def reserve_path(self, worker, path, start_time, goal_reserve_horizon=2):
-        logger.debug(
-            f"[t={start_time}] Reserving path for "
-            f"worker {worker.worker_id}"
-        )
-        previous_cell = worker.cell
-
-        for i, cell in enumerate(path):
-            timestep = start_time + i + 1
-
-            logger.debug(
-                f"  reserve cell {cell.coordinate} "
-                f"at t={timestep}"
-            )
-
-            self.reserved_cells[(cell, timestep)] = worker
-            self.reserved_edges[(previous_cell, cell, timestep)] = worker
-            previous_cell = cell
-
-        #keep the final cell reserved for a bit after arrival
-        #stops another agent planning into a workers end immediately after the path ends
-        if path:
-            final_cell = path[-1]
-        else:
-            final_cell = worker.cell
-
-        final_time = start_time + len(path)
-
-        for t in range(final_time + 1, final_time + goal_reserve_horizon +1):
-            self.reserved_cells[(final_cell, t)] = worker
-
-    def assign_next_task(self, agent):
-        if not self.tasks:
-            return
-        
-        next_task = self.tasks.pop(0)
-        agent.assign_task(next_task)
-
-        pickup_marker = PickupMarker(self)
-        pickup_marker.move_to(next_task.pickup)
-        next_task.pickup_marker = pickup_marker
-
-        logger.info(
-            f"[t={self.steps}] Worker {agent.worker_id} "
-            f"assigned task: "
-            f"{next_task.pickup.coordinate} -> "
-            f"{next_task.dropoff.coordinate}"
-        )
 
     # task generator
     def maybe_generate_task(self):
-        if len(self.tasks) >= self.max_tasks_waiting:
-            return
-
         if self.random.random() > self.task_spawn_probability:
             return
         
@@ -227,7 +158,7 @@ class SpaceModel(mesa.Model):
             dropoff = self.random.choice(self.task_endpoints)
 
         task = Task(pickup=pickup, dropoff=dropoff)
-        self.tasks.append(task)
+        self.token.add_task(task)
         self.generated_tasks += 1
 
         logger.info(
@@ -273,24 +204,6 @@ class SpaceModel(mesa.Model):
         
         return self.random.sample(available_cells, count)
     
-    def clear_reservations_for(self, worker):
-        self.reserved_cells = {
-            key: value
-            for key, value in self.reserved_cells.items()
-            if value is not worker
-        }
-        self.reserved_edges = {
-            key: value
-            for key, value in self.reserved_edges.items()
-            if value is not worker
-        }
-
-    def reserve_idle_workers(self, start_time, horizon=20):
-        for worker in self.workers:
-            if worker.task is None:
-                for t in range(start_time + 1, start_time + horizon + 1):
-                    self.reserved_cells[(worker.cell, t)] = worker
-    
     #DFS to ensure all tasks are connected
     def get_reachable_cells(self, start_cell, blocked_cells):
         visited = set()
@@ -323,17 +236,6 @@ class SpaceModel(mesa.Model):
         reachable_cells = self.get_reachable_cells(first_cell, blocked_cells)
 
         return important_cells.issubset(reachable_cells)
-
-    def is_cell_reserved(self, cell, timestep, worker=None):
-        reserved_by=self.reserved_cells.get((cell, timestep))
-        return reserved_by is not None and reserved_by is not worker
-    
-    def is_edge_reserved(self, from_cell, to_cell, timestep):
-        return (from_cell, to_cell, timestep) in self.reserved_edges
-    
-    def would_swap_edges(self, from_cell, to_cell, timestep, worker=None):
-        reserved_by= self.reserved_edges.get((to_cell, from_cell, timestep))
-        return reserved_by is not None and reserved_by is not worker
     
     def debug_reservations(self, cell, horizon=10):
         logger.debug(
@@ -341,10 +243,10 @@ class SpaceModel(mesa.Model):
         )
 
         for t in range(self.steps, self.steps + horizon):
-            owner = self.reserved_cells.get((cell, t))
+            owner = self.token.reserved_cells.get((cell, t))
 
             if owner is not None:
                 logger.debug(
-                    f"  t={t}: worker {owner.worker_id}"
+                    f"  t={t}: worker {owner}"
                 )
     
