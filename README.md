@@ -2,7 +2,7 @@
 
 A small Python/Mesa project exploring the foundations of Multi-Agent Pickup and Delivery (MAPD).
 
-This project implements a dynamic grid-based multi-agent environment where workers are assigned pickup and drop-off tasks generated during simulation runtime. Agents use **A\*** search to navigate an orthogonal Von Neumann grid while interacting with dynamically generated tasks and randomly generated obstacle layouts.
+This project implements a dynamic grid-based multi-agent environment where workers are assigned pickup and drop-off tasks generated during simulation runtime. Agents use **space-time aware A\*** search to navigate an orthogonal Von Neumann grid while interacting with dynamically generated tasks and randomly generated obstacle layouts.
 
 The project is being developed incrementally towards a full MAPF/MAPD implementation inspired by Token Passing approaches.
 
@@ -12,7 +12,7 @@ The project is being developed incrementally towards a full MAPF/MAPD implementa
 - `CellAgent` implementation
 - `OrthogonalVonNeumannGrid`
 - Von Neumann neighbourhood movement
-- A\* pathfinding
+- Space-time aware A\* pathfinding
 - Multiple independent worker agents
 - Dynamic runtime task generation
 - Shared FIFO task queue
@@ -20,18 +20,28 @@ The project is being developed incrementally towards a full MAPF/MAPD implementa
 - Random obstacle generation
 - Connectivity validation for generated maps
 - Automatic task assignment
+- Reservation table infrastructure
+- Cell reservation tracking
+- Edge reservation tracking
+- Wait actions during planning
 - Browser visualisation using Mesa SolaraViz
 - Visual obstacle rendering
 - Dynamic pickup/drop-off visualisation
+- Planned path visualisation
 - Collision detection
 - Vertex collision detection
 - Edge-swap collision detection
 - Worker ID tracking
+- Simulation metrics collection using Mesa `DataCollector`
+- Timestamped simulation result exporting
+- File-based logging and debugging support
 - Task completion statistics
 - Console execution support
 
 # Running the Simulation
+
 ## Browser Visualisation (Recommended)
+
 Run the Solara application:
 
 ```bash
@@ -50,6 +60,7 @@ The browser interface displays:
 - active pickup locations
 - active drop-off locations
 - blocked cells
+- planned agent paths
 - live agent movement
 
 ## Console Mode
@@ -57,6 +68,36 @@ The browser interface displays:
 ```bash
 python code/run.py
 ```
+# Results and Logging
+
+Simulation outputs are automatically saved into timestamped directories inside `results/`.
+
+Generated outputs include:
+
+- model-level metrics CSVs
+- agent-level metrics CSVs
+- simulation log files
+
+Example structure:
+
+```text
+results/
+├── 20260527_193055/
+│   ├── model_data.csv
+│   ├── agent_data.csv
+│   └── simulation.log
+```
+
+Logging currently includes:
+
+- task generation
+- task assignment
+- agent movement
+- reservation conflicts
+- path planning
+- collision events
+
+
 
 # How It Works
 
@@ -73,55 +114,90 @@ Each task contains:
 pickup
 dropoff
 ```
+
 Tasks are generated dynamically during runtime and stored in a shared FIFO task queue.
 
-Free agents automatically request the next available task. Agents first plan a route from their current location to the pickup cell using **A\*** search. Once the pickup location is reached, the agent replans from the pickup cell to the drop-off location.
+Free agents automatically request the next available task. Agents first plan a route from their current location to the pickup cell using **space-time aware A\*** search. Once the pickup location is reached, the agent replans from the pickup cell to the drop-off location.
+
+The planner reasons over both:
+
+- spatial position
+- timestep
+
+This allows the simulation to begin reasoning about future agent conflicts and path reservations.
 
 Agents are activated using Mesa’s `shuffle_do()` method to reduce sequencing bias caused by fixed update ordering.
 
 Obstacle layouts are generated randomly while ensuring that all important cells (worker start locations and task endpoints) remain reachable.
 
-The simulation also includes collision detection for:
+
+
+# Collision Detection and Reservations
+
+The simulation currently detects:
 
 - vertex collisions
 - edge-swap collisions
 
-Collision events are currently detected and reported, but not yet avoided.
+The project also includes an early reservation-table implementation.
+
+Workers reserve:
+
+- future occupied cells
+- traversed edges
+- temporary goal occupancy
+
+The reservation system is still experimental and does not yet fully prevent all collisions.
+
+
 
 # Current Limitations
 
 This is still an early MAPD implementation. The current implementation includes:
+
 - multiple agents
 - shared FIFO task queue
-- random obstacle generation
 - dynamic task generation
-- independent A\* planning
+- random obstacle generation
+- connectivity validation
+- independent space-time A\* planning
+- reservation-table infrastructure
 - browser visualisation
 - collision detection
+- simulation data collection
+- logging/debugging support
 
 The following limitations still exist:
-- no collision avoidance
-- no reservation table
-- no space-time planning
-- no cooperative planning
+
+- collision avoidance is not yet fully reliable
+- no cooperative replanning
+- no prioritised planning
+- no token passing
 - no task allocation strategies
-- no visualisation of planned paths
+- reservations may become stale after replanning
 - agents may still occupy the same cell simultaneously
 - agents may still perform edge swaps
+- path planning is currently greedy and decentralised
+
+
 
 # Future Work
+
 Planned extensions include:
-- collision avoidance
-- reservation tables
-- space-time A\*
+
+- robust collision avoidance
 - prioritised planning
 - token passing
 - cooperative pathfinding
+- reservation expiry systems
+- rolling horizon planning
 - task allocation strategies
-- planned path visualisation
 - congestion visualisation
-- comparison of MAPF/MAPD algorithms
+- reservation visualisation
+- MAPF/MAPD algorithm comparison
 - performance benchmarking
+
+
 
 # Motivation
 
@@ -132,6 +208,7 @@ The aim of this project is to gradually build towards a working MAPF/MAPD simula
 - path planning
 - dynamic task generation
 - multi-agent coordination
+- reservation-based planning
 
 The project is intended as a learning exercise in:
 
