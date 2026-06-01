@@ -102,6 +102,7 @@ class WorkerAgent(CellAgent):
     
     def assign_task(self, task, path=None):
         self.model.token.clear_worker(self)
+        self.model.token.clear_parking(self)
 
         if path is None:
             path = a_star(
@@ -266,15 +267,9 @@ class WorkerAgent(CellAgent):
             return False
 
         #find the available parking spots
-        occupied_parking = {
-            worker.cell
-            for worker in self.model.workers
-            if worker is not self
-        }
-
         available_parking = [
             cell for cell in self.model.parking_cells
-            if cell not in occupied_parking
+            if not token.is_parking_taken(cell, self)
         ]
 
         if not available_parking:
@@ -285,6 +280,8 @@ class WorkerAgent(CellAgent):
         best_path = None
         best_cost = float("inf")
 
+        #short term reserve here?
+        # but im not sure that would work as we want it
         for parking_cell in available_parking:
             path = a_star(
                 start=self.cell,
@@ -307,11 +304,13 @@ class WorkerAgent(CellAgent):
             return False
         
         token.clear_worker(self)
+        token.assign_parking(self, best_cell)
 
         self.task = None
         self.carrying = False
         self.path = best_path
 
+        #this can be done concurrently. maybe need a short term "looking" reserve.
         token.reserve_path(
             worker=self,
             path=self.path,
