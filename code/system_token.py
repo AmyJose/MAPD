@@ -40,7 +40,7 @@ class SystemToken:
         self.parking_assignments[worker.worker_id] = parking_cell
 
         logger.info(
-            f"Token assigned parking {parking_cell.coordinate} ",
+            f"Token assigned parking {parking_cell.coordinate} "
             f"to worker {worker.worker_id}"
         )
     def clear_parking(self, worker):
