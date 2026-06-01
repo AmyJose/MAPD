@@ -9,10 +9,13 @@ logger = logging.getLogger(__name__)
 
 class SpaceModel(mesa.Model):
     """a model containing some number of agents that move around a grid"""
-    def __init__(self, width = 10, height = 10, seed=None):
-        super().__init__(seed=seed)
+    def __init__(self, width = 10, height = 10, scenario="random"):
+        super().__init__()
 
-        self.grid = OrthogonalVonNeumannGrid((width, height), torus=False, random=self.random)
+        self.grid = OrthogonalVonNeumannGrid(
+            (width, height), torus=False, random=self.random)
+        
+        self.scenario = scenario
 
         self.blocked_spawn_probability = 0.15
         self.num_workers = 3
@@ -28,23 +31,22 @@ class SpaceModel(mesa.Model):
         self.completed_tasks = 0
         self.generated_tasks = 0
 
-        self.start_cells = self.generate_random_cells(self.num_workers)
+        if scenario == "standard":
+            self.setup_standard()
+        elif scenario == "random":
+            self.setup_random()
+        else:
+            raise ValueError(f"Unknown scenario: {self.scenario}")
+        
         for i, cell in enumerate(self.start_cells):
             worker = WorkerAgent(self, worker_id=i)
             worker.move_to(cell)
             self.workers.append(worker)
-
-        self.task_endpoints = self.generate_random_cells(self.num_task_endpoints, forbidden=set(self.start_cells))
-
-        self.parking_cells = self.generate_random_cells(
-            count=self.num_workers,
-            forbidden= set(self.start_cells) | set(self.task_endpoints)
-        )
+        
         for cell in self.parking_cells:
             park = ParkingMarker(self)
             park.move_to(cell)
-
-        self.blocked_cells = self.generate_valid_blocked_cells(forbidden = set(self.start_cells) | set(self.task_endpoints) | set(self.parking_cells))
+        
         for cell in self.blocked_cells:
             block = BlockedCellMarker(self)
             block.move_to(cell)
@@ -69,6 +71,44 @@ class SpaceModel(mesa.Model):
                 "Cell": lambda a: a.cell.coordinate if a.cell else None,
             }
         )
+
+    def setup_standard(self):
+        self.start_cells = [
+                self.grid[(0, 0)],
+                self.grid[(0, 1)],
+                self.grid[(1, 0)],
+            ]
+        
+        self.task_endpoints = [
+                self.grid[(2, 2)],
+                self.grid[(8, 8)],
+                self.grid[(1, 7)],
+                self.grid[(6, 1)],
+                self.grid[(7, 2)],
+                self.grid[(4, 8)],
+                self.grid[(8, 1)],
+                self.grid[(2, 6)],
+            ]
+
+        self.parking_cells = [
+                self.grid[(9, 0)],
+                self.grid[(9, 1)],
+                self.grid[(8, 0)],
+            ]
+
+        self.blocked_cells = set()
+
+    def setup_random(self):
+        self.start_cells = self.generate_random_cells(self.num_workers)
+        
+        self.task_endpoints = self.generate_random_cells(self.num_task_endpoints, forbidden=set(self.start_cells))
+
+        self.parking_cells = self.generate_random_cells(
+            count=self.num_workers,
+            forbidden= set(self.start_cells) | set(self.task_endpoints)
+        )
+
+        self.blocked_cells = self.generate_valid_blocked_cells(forbidden = set(self.start_cells) | set(self.task_endpoints) | set(self.parking_cells))
 
     def step(self):
         """Advance by one step"""
@@ -245,17 +285,3 @@ class SpaceModel(mesa.Model):
         reachable_cells = self.get_reachable_cells(first_cell, blocked_cells)
 
         return important_cells.issubset(reachable_cells)
-    
-    def debug_reservations(self, cell, horizon=10):
-        logger.debug(
-            f"Reservations for {cell.coordinate}:"
-        )
-
-        for t in range(self.steps, self.steps + horizon):
-            owner = self.token.reserved_cells.get((cell, t))
-
-            if owner is not None:
-                logger.debug(
-                    f"  t={t}: worker {owner}"
-                )
-    
