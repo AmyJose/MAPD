@@ -19,6 +19,7 @@ class SystemToken:
         self.paths = {}
         self.reserved_cells = {}
         self.reserved_edges = {}
+        self.parking_assignments = {}
 
     def add_task(self, task):
         self.tasks.append(task)
@@ -34,6 +35,16 @@ class SystemToken:
             f"Token assigned task to worker {worker.worker_id}: "
             f"{task.pickup.coordinate} -> {task.dropoff.coordinate}"
         )
+
+    def assign_parking(self, worker, parking_cell):
+        self.parking_assignments[worker.worker_id] = parking_cell
+
+        logger.info(
+            f"Token assigned parking {parking_cell.coordinate} ",
+            f"to worker {worker.worker_id}"
+        )
+    def clear_parking(self, worker):
+        self.parking_assignments.pop(worker.worker_id, None)
 
     def reserve_path(self, worker, path, start_time):
         worker_id = worker.worker_id
@@ -100,6 +111,14 @@ class SystemToken:
 
         return blocked
         
+    def is_parking_taken(self, parking_cell, worker=None):
+        worker_id = worker.worker_id if worker is not None else None
+
+        for assigned_worker_id, assigned_cell in self.parking_assignments.items():
+            if assigned_worker_id != worker_id and assigned_cell == parking_cell:
+                return True
+        return False
+
     def would_swap_edges(self, from_cell, to_cell, timestep, worker=None):
         reserved_by = self.reserved_edges.get((to_cell, from_cell, timestep))
         worker_id = worker.worker_id if worker is not None else None
