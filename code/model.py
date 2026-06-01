@@ -75,28 +75,42 @@ class SpaceModel(mesa.Model):
     def setup_standard(self):
         self.start_cells = [
                 self.grid[(0, 0)],
-                self.grid[(0, 1)],
-                self.grid[(1, 0)],
+                self.grid[(5, 0)],
+                self.grid[(9, 0)],
             ]
         
         self.task_endpoints = [
-                self.grid[(2, 2)],
+                self.grid[(2, 0)],
+                self.grid[(1, 4)],
+                self.grid[(0, 8)],
+                self.grid[(1, 9)],
+                self.grid[(5, 7)],
+                self.grid[(8, 4)],
+                self.grid[(9, 4)],
                 self.grid[(8, 8)],
-                self.grid[(1, 7)],
-                self.grid[(6, 1)],
-                self.grid[(7, 2)],
-                self.grid[(4, 8)],
-                self.grid[(8, 1)],
-                self.grid[(2, 6)],
             ]
 
         self.parking_cells = [
-                self.grid[(9, 0)],
-                self.grid[(9, 1)],
-                self.grid[(8, 0)],
+                self.grid[(3, 9)],
+                self.grid[(4, 9)],
+                self.grid[(5, 9)],
             ]
 
-        self.blocked_cells = set()
+        self.blocked_cells = {
+            self.grid[(2, 3)],
+            self.grid[(2, 4)],
+            self.grid[(3, 3)],
+            self.grid[(3, 4)],
+            self.grid[(7, 1)],
+            self.grid[(0, 6)],
+            self.grid[(1, 6)],
+            self.grid[(2, 6)],
+            self.grid[(5, 7)],
+            self.grid[(8, 5)],
+            self.grid[(8, 6)],
+            self.grid[(9, 5)],
+            self.grid[(9, 6)],
+        }
 
     def setup_random(self):
         self.start_cells = self.generate_random_cells(self.num_workers)
