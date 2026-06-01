@@ -143,4 +143,16 @@ class SystemToken:
 
         return blocked
     
+    def clear_old_reservations(self, current_time):
+        self.reserved_cells = {
+            key: value
+            for key, value in self.reserved_cells.items()
+            if key[1] >= current_time
+        }
+
+        self.reserved_edges = {
+            key: value
+            for key, value in self.reserved_edges.items()
+            if key[2] >= current_time
+        }
     

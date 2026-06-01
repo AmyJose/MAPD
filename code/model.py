@@ -78,6 +78,9 @@ class SpaceModel(mesa.Model):
             worker: worker.cell
             for worker in self.workers
         }
+
+        self.token.clear_old_reservations(self.steps)
+
         self.maybe_generate_task()
 
         #self.reserve_idle_workers(self.steps)
