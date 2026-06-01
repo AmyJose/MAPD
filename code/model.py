@@ -9,8 +9,8 @@ logger = logging.getLogger(__name__)
 
 class SpaceModel(mesa.Model):
     """a model containing some number of agents that move around a grid"""
-    def __init__(self, width = 10, height = 10, scenario="random"):
-        super().__init__()
+    def __init__(self, width = 10, height = 10, seed = None,scenario="random"):
+        super().__init__(seed=seed)
 
         self.grid = OrthogonalVonNeumannGrid(
             (width, height), torus=False, random=self.random)

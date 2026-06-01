@@ -156,7 +156,7 @@ class SystemToken:
             if key[2] >= current_time
         }
 
-    def refresh_parking_reservations(self, workers, current_time, horizon=20):
+    def refresh_parking_reservations(self, workers, current_time, horizon=0):
         for worker in workers:
             parking_cell = self.parking_assignments.get(worker.worker_id)
 

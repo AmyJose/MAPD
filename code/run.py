@@ -43,6 +43,7 @@ logging.basicConfig(
 model = SpaceModel(
     width=10,
     height=10,
+    seed=args.seed,
     scenario=args.scenario
 )
 
