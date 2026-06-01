@@ -80,10 +80,9 @@ class SpaceModel(mesa.Model):
         }
 
         self.token.clear_old_reservations(self.steps)
+        self.token.refresh_parking_reservations(self.workers, self.steps)
 
         self.maybe_generate_task()
-
-        #self.reserve_idle_workers(self.steps)
         
         for worker in self.workers:
             if worker.task is None:

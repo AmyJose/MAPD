@@ -155,4 +155,16 @@ class SystemToken:
             for key, value in self.reserved_edges.items()
             if key[2] >= current_time
         }
+
+    def refresh_parking_reservations(self, workers, current_time, horizon=20):
+        for worker in workers:
+            parking_cell = self.parking_assignments.get(worker.worker_id)
+
+            if parking_cell is None:
+                continue
+
+            for t in range(current_time, current_time + horizon + 1):
+                self.reserved_cells[(parking_cell, t)] = worker.worker_id
+
+    
     
