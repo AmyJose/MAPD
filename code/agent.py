@@ -237,26 +237,38 @@ class WorkerAgent(CellAgent):
         #use A* to determine the closest pickup location 
         # (what if this was overall location....)
         best_cost = float("inf")
-        best_path = None
+        best_pickup_path = None
         best_task = None
         for task in tasks:
-            path = a_star(
+            pickup_path = a_star(
                 start=self.cell,
                 goal=task.pickup,
                 start_time=self.model.steps,
                 model=self.model,
                 worker=self
             )
-            if not path and self.cell != task.pickup:
+            if not pickup_path and self.cell != task.pickup:
                 continue
 
-            cost = len(path)
+            pickup_arrival_time = self.model.steps + len(pickup_path)
+
+            dropoff_path = a_star(
+                start=task.pickup,
+                goal=task.dropoff,
+                start_time=pickup_arrival_time,
+                model=self.model,
+                worker=self
+            )
+            if not dropoff_path and task.pickup != task.dropoff:
+                continue
+
+            cost = len(pickup_path) + len(dropoff_path)
 
             if cost< best_cost:
                 best_cost = cost
                 best_task = task
-                best_path = path
-        return best_task, best_path
+                best_pickup_path = pickup_path
+        return best_task, best_pickup_path
 
 
     def go_to_parking(self):

@@ -100,16 +100,25 @@ class SystemToken:
         reserved_by = self.reserved_cells.get((cell, timestep))
         worker_id = worker.worker_id if worker is not None else None
 
-        blocked = reserved_by is not None and reserved_by != worker_id
-
-        if blocked:
+        if reserved_by is not None and reserved_by != worker_id:
             logger.debug(
                 f"Token cell conflict: cell {cell.coordinate} "
                 f"at t={timestep} reserved by worker {reserved_by}; "
                 f"requested by worker {worker_id}"
             )
+            return True
 
-        return blocked
+        #dont path through another workers assigned parking cell
+        for parked_worker_id, parking_cell in self.parking_assignments.items():
+            if parked_worker_id !=worker_id and parking_cell == cell:
+                logger.debug(
+                    f"Token cell conflict: cell {parking_cell.coordinate} "
+                    f"has worker {parked_worker_id} parked; "
+                    f"requested by worker {worker_id}"
+                )       
+                return True
+
+        return False
         
     def is_parking_taken(self, parking_cell, worker=None):
         worker_id = worker.worker_id if worker is not None else None
