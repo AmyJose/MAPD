@@ -1,7 +1,7 @@
 import mesa
 from mesa.discrete_space import OrthogonalVonNeumannGrid
 from agent import WorkerAgent
-from markers import PickupMarker, BlockedCellMarker
+from markers import ParkingMarker, BlockedCellMarker
 from system_token import SystemToken, Task
 import logging
 
@@ -36,12 +36,19 @@ class SpaceModel(mesa.Model):
 
         self.task_endpoints = self.generate_random_cells(self.num_task_endpoints, forbidden=set(self.start_cells))
 
-        self.blocked_cells = self.generate_valid_blocked_cells(forbidden = set(self.start_cells) | set(self.task_endpoints))
+        self.parking_cells = self.generate_random_cells(
+            count=self.num_workers,
+            forbidden= set(self.start_cells) | set(self.task_endpoints)
+        )
+        for cell in self.parking_cells:
+            park = ParkingMarker(self)
+            park.move_to(cell)
+
+        self.blocked_cells = self.generate_valid_blocked_cells(forbidden = set(self.start_cells) | set(self.task_endpoints) | set(self.parking_cells))
         for cell in self.blocked_cells:
             block = BlockedCellMarker(self)
             block.move_to(cell)
 
-        
         #data collectors for run stats
         self.datacollector = mesa.DataCollector(
             model_reporters={
@@ -71,9 +78,11 @@ class SpaceModel(mesa.Model):
             worker: worker.cell
             for worker in self.workers
         }
-        self.maybe_generate_task()
 
-        #self.reserve_idle_workers(self.steps)
+        self.token.clear_old_reservations(self.steps)
+        self.token.refresh_parking_reservations(self.workers, self.steps)
+
+        self.maybe_generate_task()
         
         for worker in self.workers:
             if worker.task is None:
@@ -227,7 +236,7 @@ class SpaceModel(mesa.Model):
         return visited
     
     def is_connected_for_problem(self, blocked_cells):
-        important_cells = set(self.start_cells) | set(self.task_endpoints)
+        important_cells = set(self.start_cells) | set(self.task_endpoints) | set(self.parking_cells)
 
         if not important_cells:
             return True

@@ -19,6 +19,7 @@ class SystemToken:
         self.paths = {}
         self.reserved_cells = {}
         self.reserved_edges = {}
+        self.parking_assignments = {}
 
     def add_task(self, task):
         self.tasks.append(task)
@@ -34,6 +35,16 @@ class SystemToken:
             f"Token assigned task to worker {worker.worker_id}: "
             f"{task.pickup.coordinate} -> {task.dropoff.coordinate}"
         )
+
+    def assign_parking(self, worker, parking_cell):
+        self.parking_assignments[worker.worker_id] = parking_cell
+
+        logger.info(
+            f"Token assigned parking {parking_cell.coordinate} "
+            f"to worker {worker.worker_id}"
+        )
+    def clear_parking(self, worker):
+        self.parking_assignments.pop(worker.worker_id, None)
 
     def reserve_path(self, worker, path, start_time):
         worker_id = worker.worker_id
@@ -89,17 +100,34 @@ class SystemToken:
         reserved_by = self.reserved_cells.get((cell, timestep))
         worker_id = worker.worker_id if worker is not None else None
 
-        blocked = reserved_by is not None and reserved_by != worker_id
-
-        if blocked:
+        if reserved_by is not None and reserved_by != worker_id:
             logger.debug(
                 f"Token cell conflict: cell {cell.coordinate} "
                 f"at t={timestep} reserved by worker {reserved_by}; "
                 f"requested by worker {worker_id}"
             )
+            return True
 
-        return blocked
+        #dont path through another workers assigned parking cell
+        for parked_worker_id, parking_cell in self.parking_assignments.items():
+            if parked_worker_id !=worker_id and parking_cell == cell:
+                logger.debug(
+                    f"Token cell conflict: cell {parking_cell.coordinate} "
+                    f"has worker {parked_worker_id} parked; "
+                    f"requested by worker {worker_id}"
+                )       
+                return True
+
+        return False
         
+    def is_parking_taken(self, parking_cell, worker=None):
+        worker_id = worker.worker_id if worker is not None else None
+
+        for assigned_worker_id, assigned_cell in self.parking_assignments.items():
+            if assigned_worker_id != worker_id and assigned_cell == parking_cell:
+                return True
+        return False
+
     def would_swap_edges(self, from_cell, to_cell, timestep, worker=None):
         reserved_by = self.reserved_edges.get((to_cell, from_cell, timestep))
         worker_id = worker.worker_id if worker is not None else None
@@ -114,5 +142,29 @@ class SystemToken:
             )
 
         return blocked
+    
+    def clear_old_reservations(self, current_time):
+        self.reserved_cells = {
+            key: value
+            for key, value in self.reserved_cells.items()
+            if key[1] >= current_time
+        }
+
+        self.reserved_edges = {
+            key: value
+            for key, value in self.reserved_edges.items()
+            if key[2] >= current_time
+        }
+
+    def refresh_parking_reservations(self, workers, current_time, horizon=20):
+        for worker in workers:
+            parking_cell = self.parking_assignments.get(worker.worker_id)
+
+            if parking_cell is None:
+                continue
+
+            for t in range(current_time, current_time + horizon + 1):
+                self.reserved_cells[(parking_cell, t)] = worker.worker_id
+
     
     

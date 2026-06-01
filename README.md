@@ -2,7 +2,7 @@
 
 A small Python/Mesa project exploring the foundations of Multi-Agent Pickup and Delivery (MAPD).
 
-This project implements a dynamic grid-based multi-agent environment where workers are assigned pickup and drop-off tasks generated during simulation runtime. Agents use **space-time aware A\*** search to navigate an orthogonal Von Neumann grid while interacting with dynamically generated tasks and randomly generated obstacle layouts.
+This project implements a dynamic grid-based multi-agent environment where workers are assigned pickup and drop-off tasks generated during simulation runtime. Agents use **space-time aware A\*** search to navigate an orthogonal Von Neumann grid while interacting with dynamically generated tasks, randomly generated obstacle layouts, and token-managed reservations.
 
 The project is being developed incrementally towards a full MAPF/MAPD implementation inspired by Token Passing approaches.
 
@@ -12,42 +12,34 @@ The project is being developed incrementally towards a full MAPF/MAPD implementa
 - Mesa-based agent simulation
 - `CellAgent` implementation
 - `OrthogonalVonNeumannGrid`
-- Von Neumann neighbourhood movement
 - Space-time aware A\* pathfinding
 - Multiple independent worker agents
 - Dynamic runtime task generation
-- Early Token Passing architecture
 - Shared system token for:
-  - task ownership
-  - worker assignments
+  - task storage
+  - worker-task assignments
   - planned paths
-  - reservation tracking
-- Randomised worker activation using Mesa `shuffle_do()`
+  - cell reservations
+  - edge reservations
+  - parking assignments
+- Closest-completion-cost task selection
+- Token-managed parking behaviour for idle workers
+- Parking reservation refreshing
+- Reservation cleanup for old timesteps
 - Random obstacle generation
-- Connectivity validation for generated maps
-- Reservation table infrastructure
-- Cell reservation tracking
-- Edge reservation tracking
-- Wait actions during planning
+- Connectivity validation for starts, task endpoints, and parking cells
 - Browser visualisation using Mesa SolaraViz
-- Visual obstacle rendering
 - Dynamic pickup/drop-off visualisation
 - Planned path visualisation
-- Collision detection
-- Vertex collision detection
-- Edge-swap collision detection
+- Vertex and edge-swap collision detection
 - Worker ID tracking
 - Simulation metrics collection using Mesa `DataCollector`
 - Timestamped simulation result exporting
 - File-based logging and debugging support
-- Task completion statistics
-- Console execution support
 
 # Running the Simulation
 
-## Browser Visualisation (Recommended)
-
-Run the Solara application:
+## Browser Visualisation
 
 ```bash
 solara run code/app.py
@@ -75,23 +67,13 @@ python code/run.py
 ```
 # Results and Logging
 
-Simulation outputs are automatically saved into timestamped directories inside `results/`.
+Simulation outputs are saved into timestamped directories inside `results/`.
 
-Generated outputs include:
+Generated outputs may include:
 
 - model-level metrics CSVs
 - agent-level metrics CSVs
 - simulation log files
-
-Example structure:
-
-```text
-results/
-├── 20260527_193055/
-│   ├── model_data.csv
-│   ├── agent_data.csv
-│   └── simulation.log
-```
 
 Logging currently includes:
 
@@ -100,11 +82,10 @@ Logging currently includes:
 - task assignment
 - reservation updates
 - reservation conflicts
-- agent movement
+- worker movement
 - path planning
 - collision events
-- worker state transitions
-
+- parking behaviour
 
 
 # How It Works
@@ -125,33 +106,29 @@ dropoff
 
 Tasks are generated dynamically during runtime and stored inside a shared system token.
 
-Idle workers request access to the token and attempt to claim an available task. Once assigned, workers independently plan routes using **space-time aware A\*** search.
+Idle workers request the token. If tasks are available, workers evaluate reachable tasks using estimated full completion cost:
 
-Agents first plan a route from their current location to the pickup cell. Once the pickup location is reached, the agent replans from the pickup cell to the drop-off location.
+```text
+cost = path to pickup + path from pickup to drop-off
+```
+
+The worker claims the task with the lowest estimated completion cost, plans a path to the pickup location, and records its assignment and reservations in the token.
+
+If no suitable task is available, the worker moves to a token-managed parking cell. Parking cells are assigned through the token to avoid multiple idle workers selecting the same parking location.
 
 The planner reasons over both:
 
 - spatial position
 - timestep
 
-This allows the simulation to reason about future conflicts and reserved space-time occupancy.
-
 Workers reserve:
 
 - future occupied cells
 - traversed edges
 - temporary goal occupancy
+- assigned parking cells
 
-The token currently stores:
-
-- active tasks
-- worker-task assignments
-- planned paths
-- reservation tables
-
-Agents are activated using Mesa’s `shuffle_do()` method to reduce sequencing bias caused by fixed update ordering.
-
-Obstacle layouts are generated randomly while ensuring that all important cells (worker start locations and task endpoints) remain reachable.
+Old reservations are periodically cleared, while parking reservations are refreshed to keep parked workers protected.
 
 # Collision Detection and Reservations
 
@@ -160,9 +137,7 @@ The simulation currently detects:
 - vertex collisions
 - edge-swap collisions
 
-The reservation system is used to reduce future conflicts during path planning.
-
-Workers check reservations before expanding future states during A\* search. Paths that would violate reserved cells or reserved edge transitions are rejected during planning.
+The reservation system is used to reduce future conflicts during path planning. Workers check reserved cells, reserved edges, and occupied parking cells before expanding future A\* states.
 
 The reservation system is still experimental and does not yet fully guarantee collision-free execution.
 
@@ -171,10 +146,9 @@ The reservation system is still experimental and does not yet fully guarantee co
 This is still an early MAPD implementation. The current implementation includes:
 
 - multiple agents
-- token-based task ownership
 - dynamic task generation
-- random obstacle generation
-- connectivity validation
+- token-based task ownership
+- token-managed parking
 - independent space-time A\* planning
 - reservation-table infrastructure
 - browser visualisation
@@ -188,8 +162,7 @@ The following limitations still exist:
 - no cooperative replanning
 - no prioritised planning
 - token passing is still partial/incomplete
-- no advanced task allocation strategies
-- reservations may become stale after replanning
+- no advanced task allocation strategy beyond estimated completion cost
 - agents may still occupy the same cell simultaneously
 - agents may still perform edge swaps
 - planning is currently decentralised and greedy
@@ -202,14 +175,12 @@ Planned extensions include:
 - prioritised planning
 - full Token Passing implementation
 - cooperative pathfinding
-- reservation expiry systems
 - rolling horizon planning
 - smarter task allocation strategies
 - congestion visualisation
 - reservation visualisation
 - MAPF/MAPD algorithm comparison
 - performance benchmarking
-
 
 
 # Motivation
@@ -223,6 +194,7 @@ The aim of this project is to gradually build towards a working MAPF/MAPD simula
 - multi-agent coordination
 - reservation-based planning
 - token-based coordination
+- parking/endpoint management
 
 The project is intended as a learning exercise in:
 
