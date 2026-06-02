@@ -179,13 +179,33 @@ class WorkerAgent(CellAgent):
 
             self.model.token.clear_worker(self)
 
-            self.path = a_star(
+            dropoff_path = a_star(
                 start=self.cell, 
                 goal=self.task.dropoff, 
                 start_time=self.model.steps,
                 worker=self,
                 model=self.model
             )
+
+            if not dropoff_path and self.cell != self.task.dropoff:
+                logger.warning(
+                    f"Worker {self.worker_id} could not find path to dropoff "
+                    f"{self.task.dropoff.coordinate}; waiting at pickup "
+                    f"{self.cell.coordinate}"
+                )
+
+                self.carrying = True
+                self.path = []
+
+                self.model.token.reserve_path(
+                    worker=self,
+                    path=[],
+                    start_time=self.model.steps,
+                )
+
+                return
+
+            self.path=dropoff_path
 
             self.model.token.reserve_path(
                 worker=self,
