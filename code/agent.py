@@ -201,6 +201,7 @@ class WorkerAgent(CellAgent):
                     worker=self,
                     path=[],
                     start_time=self.model.steps,
+                    goal_reserve_horizon=20
                 )
 
                 return

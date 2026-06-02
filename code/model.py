@@ -90,14 +90,14 @@ class SpaceModel(mesa.Model):
             self.grid[(4, 1)]
         ]
         self.parking_cells = [
-            self.grid[(0, 1)],
-            self.grid[(4, 1)]
+            self.grid[(2, 2)],
+            self.grid[(0, 1)]
         ]
         self.blocked_cells = {
             self.grid[(x, y)]
             for x in range(5)
             for y in range(3)
-            if y != 1
+            if y != 1 and (x, y) != (2,2)
         }
         
 
@@ -230,7 +230,10 @@ class SpaceModel(mesa.Model):
                 a_start, a_end = move_a
                 b_start, b_end = move_b
 
-                if a_start == b_end and b_start == a_end:
+                if (a_start != a_end
+                    and a_start == b_end 
+                    and b_start == a_end
+                    and b_start != b_end):
                     self.edge_collisions += 1
 
                     logger.warning(

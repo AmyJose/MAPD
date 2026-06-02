@@ -46,7 +46,7 @@ class SystemToken:
     def clear_parking(self, worker):
         self.parking_assignments.pop(worker.worker_id, None)
 
-    def reserve_path(self, worker, path, start_time):
+    def reserve_path(self, worker, path, start_time, goal_reserve_horizon=2):
         worker_id = worker.worker_id
         self.paths[worker_id] = path
 
@@ -69,6 +69,12 @@ class SystemToken:
             self.reserved_cells[(cell, timestep)] = worker_id
             self.reserved_edges[(previous_cell, cell, timestep)] = worker_id
             previous_cell = cell
+
+        final_cell = path[-1] if path else worker.cell
+        final_time=start_time + len(path)
+
+        for t in range(final_time + 1, final_time + goal_reserve_horizon + 1):
+            self.reserved_cells[(final_cell, t)] = worker_id
 
     def clear_worker(self, worker):
         worker_id = worker.worker_id
