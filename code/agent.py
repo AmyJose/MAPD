@@ -149,6 +149,33 @@ class WorkerAgent(CellAgent):
             current_cell = self.cell
             next_cell = self.path.pop(0)
 
+            occupied_by = [
+                worker.worker_id
+                for worker in self.model.workers
+                if worker is not self and worker.cell == next_cell
+            ]
+
+            if occupied_by:
+                logger.warning(
+                    f"Worker {self.worker_id} blocked from moving "
+                    f"{current_cell.coordinate} -> {next_cell.coordinate}; "
+                    f"cell occupied by workers {occupied_by}"
+                )
+
+                # Put the move back so the worker can try again later
+                self.path.insert(0, next_cell)
+
+                # Reserve current cell because the worker is waiting here
+                self.model.token.reserve_path(
+                    worker=self,
+                    path=[],
+                    start_time=self.model.steps,
+                    goal_reserve_horizon=5,
+                )
+
+                self.create_path_markers()
+                return
+
             logger.debug(
                 f"Worker {self.worker_id} moving "
                 f"{current_cell.coordinate} -> {next_cell.coordinate}"
