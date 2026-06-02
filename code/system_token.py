@@ -126,12 +126,18 @@ class SystemToken:
 
         return False
         
-    def is_parking_taken(self, parking_cell, worker=None):
+    def is_parking_taken(self, parking_cell, worker=None, workers=None):
         worker_id = worker.worker_id if worker is not None else None
 
         for assigned_worker_id, assigned_cell in self.parking_assignments.items():
             if assigned_worker_id != worker_id and assigned_cell == parking_cell:
                 return True
+            
+        #check actual current worker positions
+        if workers is not None:
+            for other_worker in workers:
+                if other_worker is not worker and other_worker.cell == parking_cell:
+                    return True
         return False
 
     def would_swap_edges(self, from_cell, to_cell, timestep, worker=None):
@@ -162,7 +168,7 @@ class SystemToken:
             if key[2] >= current_time
         }
 
-    def refresh_parking_reservations(self, workers, current_time, horizon=0):
+    def refresh_parking_reservations(self, workers, current_time, horizon=5):
         for worker in workers:
             parking_cell = self.parking_assignments.get(worker.worker_id)
 

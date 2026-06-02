@@ -164,13 +164,17 @@ class WorkerAgent(CellAgent):
 
                 # Put the move back so the worker can try again later
                 self.path.insert(0, next_cell)
+                logger.debug(
+                    f"Worker {self.worker_id} remaining path after block: "
+                    f"{[c.coordinate for c in self.path]}"
+                )
 
                 # Reserve current cell because the worker is waiting here
+                self.model.token.clear_worker(self)
                 self.model.token.reserve_path(
                     worker=self,
-                    path=[],
+                    path=self.path,
                     start_time=self.model.steps,
-                    goal_reserve_horizon=5,
                 )
 
                 self.create_path_markers()
@@ -182,6 +186,12 @@ class WorkerAgent(CellAgent):
             )
 
             self.move_to(next_cell)
+
+            assigned_parking = self.model.token.parking_assignments.get(self.worker_id)
+
+            if assigned_parking is not None and next_cell != assigned_parking:
+                self.model.token.clear_parking(self)
+
             self.create_path_markers()
             return
         
@@ -215,22 +225,29 @@ class WorkerAgent(CellAgent):
             )
 
             if not dropoff_path and self.cell != self.task.dropoff:
+                self.carrying = True
+                self.path = []
+
                 logger.warning(
                     f"Worker {self.worker_id} could not find path to dropoff "
                     f"{self.task.dropoff.coordinate}; waiting at pickup "
                     f"{self.cell.coordinate}"
                 )
 
-                self.carrying = True
-                self.path = []
+                parked = self.go_to_parking()
 
-                self.model.token.reserve_path(
-                    worker=self,
-                    path=[],
-                    start_time=self.model.steps,
-                    goal_reserve_horizon=20
-                )
+                if not parked:
+                    logger.warning(
+                        f"Worker {self.worker_id} could not park; waiting at "
+                        f"{self.cell.coordinate}"
+                    )
 
+                    self.model.token.reserve_path(
+                        worker=self,
+                        path=[],
+                        start_time=self.model.steps,
+                        goal_reserve_horizon=20,
+                    )
                 return
 
             self.path=dropoff_path
@@ -329,7 +346,7 @@ class WorkerAgent(CellAgent):
         #find the available parking spots
         available_parking = [
             cell for cell in self.model.parking_cells
-            if not token.is_parking_taken(cell, self)
+            if not token.is_parking_taken(cell, self, self.model.workers)
         ]
 
         if not available_parking:
@@ -366,8 +383,6 @@ class WorkerAgent(CellAgent):
         token.clear_worker(self)
         token.assign_parking(self, best_cell)
 
-        self.task = None
-        self.carrying = False
         self.path = best_path
 
         #this can be done concurrently. maybe need a short term "looking" reserve.
@@ -389,7 +404,8 @@ class WorkerAgent(CellAgent):
         token = self.model.token
 
         if not token.tasks:
-            self.go_to_parking()
+            if self.cell in self.model.task_endpoints:
+                self.go_to_parking()
             return
         
         #make this smarter!
@@ -399,7 +415,8 @@ class WorkerAgent(CellAgent):
             logger.info(
                 f"Worker {self.worker_id} could not find any reachable task"
             )
-            self.go_to_parking()
+            if self.cell in self.model.task_endpoints:
+                self.go_to_parking()
             return
         
         token.tasks.remove(task)

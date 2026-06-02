@@ -90,14 +90,15 @@ class SpaceModel(mesa.Model):
             self.grid[(4, 1)]
         ]
         self.parking_cells = [
+            self.grid[(4, 2)],
             self.grid[(2, 2)],
-            self.grid[(0, 1)]
+            self.grid[(4, 0)]
         ]
         self.blocked_cells = {
             self.grid[(x, y)]
             for x in range(5)
             for y in range(3)
-            if y != 1 and (x, y) != (2,2)
+            if y != 1 and (x, y) != (4,2) and (x, y) != (4, 0)
         }
         
 
