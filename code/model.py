@@ -35,6 +35,8 @@ class SpaceModel(mesa.Model):
             self.setup_standard()
         elif scenario == "random":
             self.setup_random()
+        elif scenario == "test":
+            self.setup_test()
         else:
             raise ValueError(f"Unknown scenario: {self.scenario}")
         
@@ -71,6 +73,30 @@ class SpaceModel(mesa.Model):
                 "Cell": lambda a: a.cell.coordinate if a.cell else None,
             }
         )
+
+    def setup_test(self):
+        self.start_cells = [
+            self.grid[(0, 1)],
+            self.grid[(4, 1)]
+        ]
+
+        self.num_workers = 2
+
+        self.task_endpoints= [
+            self.grid[(0, 1)],
+            self.grid[(4, 1)]
+        ]
+        self.parking_cells = [
+            self.grid[(0, 1)],
+            self.grid[(4, 1)]
+        ]
+        self.blocked_cells = {
+            self.grid[(x, y)]
+            for x in range(5)
+            for y in range(3)
+            if y != 1
+        }
+        
 
     def setup_standard(self):
         self.start_cells = [
@@ -142,8 +168,9 @@ class SpaceModel(mesa.Model):
             if worker.task is None:
                 worker.request_token()
 
-        self.agents.shuffle_do("step")
-        
+        #self.agents.shuffle_do("step")
+        self.agents.do("step")
+
         self.detect_collisions(previous_positions)
         self.datacollector.collect(self)
 
