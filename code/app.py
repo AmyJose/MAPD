@@ -11,8 +11,10 @@ from markers import (
 )
 
 
-SCENARIO = "standard"
+SCENARIO = "test"
 SEED=42
+WIDTH=5
+HEIGHT=3
 
 
 def agent_portrayal(agent):
@@ -45,8 +47,8 @@ def agent_portrayal(agent):
 
 
 model = SpaceModel(
-    width=10,
-    height=10,
+    width=WIDTH,
+    height=HEIGHT,
     scenario=SCENARIO,
     seed=SEED
 )

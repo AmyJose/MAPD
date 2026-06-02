@@ -53,6 +53,9 @@ class SpaceModel(mesa.Model):
             block = BlockedCellMarker(self)
             block.move_to(cell)
 
+        if self.scenario == "test":
+            self.create_test_tasks()
+
         #data collectors for run stats
         self.datacollector = mesa.DataCollector(
             model_reporters={
@@ -238,6 +241,9 @@ class SpaceModel(mesa.Model):
 
     # task generator
     def maybe_generate_task(self):
+        if self.scenario == "test":
+            return
+
         if self.random.random() > self.task_spawn_probability:
             return
         
@@ -255,6 +261,20 @@ class SpaceModel(mesa.Model):
             f"[t={self.steps}] Generated task: "
             f"{pickup.coordinate} -> {dropoff.coordinate}"
         )
+
+    def create_test_tasks(self):
+        task_0 = Task(
+            pickup=self.grid[(0, 1)],
+            dropoff=self.grid[(4, 1)],
+        )
+
+        task_1 = Task(
+            pickup=self.grid[(4, 1)],
+            dropoff=self.grid[(0, 1)],
+        )
+
+        self.token.add_task(task_0)
+        self.token.add_task(task_1)
     
     def generate_valid_blocked_cells(self, forbidden=None, max_attempts=100):
         forbidden = forbidden or set()

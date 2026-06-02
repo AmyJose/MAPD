@@ -27,6 +27,20 @@ parser.add_argument(
     help="Number of simulation steps to run",
 )
 
+parser.add_argument(
+    "--width",
+    type=int,
+    default=10,
+    help="Width of grid",
+)
+
+parser.add_argument(
+    "--height",
+    type=int,
+    default=10,
+    help="Height of grid",
+)
+
 args = parser.parse_args()
 
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -41,8 +55,8 @@ logging.basicConfig(
 )
 
 model = SpaceModel(
-    width=10,
-    height=10,
+    width=args.width,
+    height=args.height,
     seed=args.seed,
     scenario=args.scenario
 )
@@ -65,5 +79,9 @@ logging.info(f"Generated tasks: {model.generated_tasks}")
 logging.info(f"Completed tasks: {model.completed_tasks}")
 logging.info(f"Vertex collisions: {model.vertex_collisions}")
 logging.info(f"Edge collisions: {model.edge_collisions}")
+
+if args.scenario == "test":
+    assert model.vertex_collisions == 0, "Vertex Collision occurred"
+    assert model.vertex_collisions == 0, "Edge Collision occured"
 
 print(f"Run successful! Output file location: {output_dir}")
