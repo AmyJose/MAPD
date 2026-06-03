@@ -186,18 +186,19 @@ class SpaceModel(mesa.Model):
         for worker in self.workers:
             if worker.is_free() and worker.has_reached_end_of_token_path():
                 worker.step()
-
-        if self.show_display:
-            self.display.update()
+            
+        # catch tasks where worker starts already at pickup
+        for worker in self.workers:
+            worker.update_task_progress()
 
         for worker in self.workers:
             worker.move()
-
-        if self.show_display:
-            self.display.update()
         
         for worker in self.workers:
             worker.update_task_progress()
+        
+        if self.show_display:
+            self.display.update()
 
         self.detect_collisions(previous_positions)
         self.datacollector.collect(self)
