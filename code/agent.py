@@ -4,6 +4,26 @@ import logging
 from itertools import count
 logger = logging.getLogger(__name__)
 
+#---------------------helper functions for debug-----------------------
+def cell_str(cell):
+    if cell is None:
+        return "None"
+    return str(cell.coordinate)
+
+
+def path_str(path):
+    if not path:
+        return "[]"
+    return " -> ".join(cell_str(cell) for cell in path)
+
+
+def task_str(task):
+    if task is None:
+        return "None"
+    return f"{cell_str(task.pickup)} -> {cell_str(task.dropoff)}"
+
+#-----------------------------------------------------------------------
+
 #manhattan distance
 def heuristic(a, b):
     ax, ay = a.coordinate
@@ -109,18 +129,47 @@ class WorkerAgent(CellAgent):
     def step(self):
         #request the token
         self.request_token()
+        logger.debug(
+            f"[t={self.model.steps}] Worker {self.worker_id} STEP START "
+            f"at {cell_str(self.cell)} | "
+            f"task={task_str(self.task)} | "
+            f"token_tasks={len(self.token.tasks)} | "
+            f"current_token_path={path_str(self.token.paths.get(self.worker_id))}"
+        )   
+
         #choose a task from the task set such that no path of other agents in the token ends in the pickup or delivery location of the task
         # e.g., available task set = tasks w no current paths to pickup or dropoff in token
         available_tasks = []
-        for task in self.token.tasks:
-            endpoints = {
-                path[-1]
-                for path in self.token.paths.values()
-                if path
-            }
 
-            if task.pickup not in endpoints and task.dropoff not in endpoints:
+        endpoints = {
+            path[-1]
+            for worker_id, path in self.token.paths.items()
+            if worker_id != self.worker_id and path
+        }
+
+        logger.debug(
+            f"[t={self.model.steps}] Worker {self.worker_id} sees occupied endpoints: "
+            f"{[cell_str(cell) for cell in endpoints]}"
+        )
+        
+        for task in self.token.tasks:
+            task_available = (
+                task.pickup not in endpoints
+                and task.dropoff not in endpoints
+            )
+
+            logger.debug(
+                f"[t={self.model.steps}] Worker {self.worker_id} checking task "
+                f"{task_str(task)} | available={task_available}"
+            )
+
+            if task_available:
                 available_tasks.append(task)
+
+        logger.debug(
+            f"[t={self.model.steps}] Worker {self.worker_id} available_tasks="
+            f"{[task_str(task) for task in available_tasks]}"
+        )
 
         # if available tasks is not empty
         if available_tasks:
@@ -129,32 +178,81 @@ class WorkerAgent(CellAgent):
             t = None
             for task in available_tasks:
                 h = self.model.h_value(self.cell, task.pickup)
+                logger.debug(
+                    f"[t={self.model.steps}] Worker {self.worker_id} h-value to task "
+                    f"{task_str(task)} = {h}"
+                )
                 if h < smallest_h:
                     smallest_h = h
                     t = task
             
             if t is None or smallest_h == float("inf"):
+                logger.debug(
+                    f"[t={self.model.steps}] Worker {self.worker_id} found available tasks "
+                    f"but none reachable. Calling Path2."
+                )
                 self.path2(self.token)
             else:
+                logger.info(
+                    f"[t={self.model.steps}] Worker {self.worker_id} selected task "
+                    f"{task_str(t)} with h={smallest_h}"
+                )
                 # assign this task to the agent
                 self.task = t
                 # remove the task from the task set
                 self.token.remove_task(self.task)
                 # call Path 1
-                self.path1(self.task, self.token)
+                path = self.path1(self.task, self.token)
+                if path is None:
+                    logger.warning(
+                        f"[t={self.model.steps}] Worker {self.worker_id} Path1 FAILED "
+                        f"for task {task_str(self.task)}"
+                    )
+                else:
+                    logger.info(
+                        f"[t={self.model.steps}] Worker {self.worker_id} Path1 SUCCESS | "
+                        f"path_len={len(path)} | path={path_str(path)}"
+                    )
         # else if ( there is no task, so cant assign itself to a task in the current timestep)
         else:
             #no task assignment in current step
             no_task_ends_here = all(task.dropoff != self.cell for task in self.token.tasks)
+            
+            logger.debug(
+                f"[t={self.model.steps}] Worker {self.worker_id} has no available task. "
+                f"no_task_ends_here={no_task_ends_here}"
+            )
             # if the agent is not in the delivery location of a task in the task set
             if no_task_ends_here:
                 # update path in token with trivial path where it rests in its current location
                 self.token.paths[self.worker_id] = [self.cell]
+                logger.debug(
+                    f"[t={self.model.steps}] Worker {self.worker_id} using trivial path "
+                    f"at {cell_str(self.cell)}"
+                )
             #else (to avoid deadlocks)
             else:
+                logger.info(
+                    f"[t={self.model.steps}] Worker {self.worker_id} is blocking a task "
+                    f"dropoff. Calling Path2."
+                )
                 # call Path 2:
-                self.path2(self.token)
+                path = self.path2(self.token)
+
+                if path is None:
+                    logger.warning(
+                        f"[t={self.model.steps}] Worker {self.worker_id} Path2 FAILED"
+                    )
+                else:
+                    logger.info(
+                        f"[t={self.model.steps}] Worker {self.worker_id} Path2 SUCCESS | "
+                        f"path_len={len(path)} | path={path_str(path)}"
+                    )
         # return token
+        logger.debug(
+            f"[t={self.model.steps}] Worker {self.worker_id} STEP END | "
+            f"new_token_path={path_str(self.token.paths.get(self.worker_id))}"
+        )
         self.return_token()
 
     
@@ -179,6 +277,10 @@ class WorkerAgent(CellAgent):
         )
 
         if path_to_pickup is None:
+            logger.warning(
+                f"[t={self.model.steps}] Worker {self.worker_id} Path1 failed: "
+                f"no path to pickup {cell_str(task.pickup)}"
+            )
             return None
         
         pickup_arrival_time = self.model.steps + len(path_to_pickup) - 1
@@ -193,12 +295,18 @@ class WorkerAgent(CellAgent):
         )
 
         if path_to_dropoff is None:
+            logger.warning(
+                f"[t={self.model.steps}] Worker {self.worker_id} Path1 failed: "
+                f"no path from pickup {cell_str(task.pickup)} "
+                f"to dropoff {cell_str(task.dropoff)}"
+            )
             return None
         
         full_path = path_to_pickup + path_to_dropoff[1:]
 
         #update the token
         token.paths[self.worker_id] = full_path
+        return full_path
 
     def path2(self, token):
         #path 2: update its path in the token with a cost-minimal path that
@@ -228,6 +336,11 @@ class WorkerAgent(CellAgent):
         ]
 
         best_path = None
+
+        logger.debug(
+            f"[t={self.model.steps}] Worker {self.worker_id} Path2 safe_endpoints="
+            f"{[cell_str(endpoint) for endpoint in safe_endpoints]}"
+        )
         for endpoint in safe_endpoints:
             path = a_star(
                 model = self.model,
@@ -247,19 +360,32 @@ class WorkerAgent(CellAgent):
             return None
 
         token.paths[self.worker_id] = best_path
+        return best_path
 
     def move(self):
         path = self.model.token.paths.get(self.worker_id)
 
         if not path:
+            logger.warning(
+                f"[t={self.model.steps}] Worker {self.worker_id} has no path to move"
+            )
             return
+
+        old_cell = self.cell
 
         if len(path) > 1:
             path.pop(0)
             next_cell = path[0]
-            self.move_to(next_cell)
         else:
-            self.move_to(path[0])
+            next_cell = path[0]
+
+        self.move_to(next_cell)
+
+        logger.debug(
+            f"[t={self.model.steps}] Worker {self.worker_id} MOVE "
+            f"{cell_str(old_cell)} -> {cell_str(next_cell)} | "
+            f"remaining_path={path_str(path)}"
+        )
 
     def request_token(self):
         self.token = self.model.token

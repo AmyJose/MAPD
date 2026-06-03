@@ -40,14 +40,20 @@ output_dir.mkdir(parents=True, exist_ok=True)
 log_file = output_dir / "simulation.log"
 
 file_handler = logging.FileHandler(log_file, mode="w")
-file_handler.setLevel(logging.DEBUG)
+if args.scenario == "warehouse":
+    file_handler.setLevel(logging.INFO)
+else:
+    file_handler.setLevel(logging.DEBUG)
 file_handler.setFormatter(
     logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
 )
 file_handler.addFilter(IgnoreMesaRegistrationLogs())
 
 root_logger = logging.getLogger()
-root_logger.setLevel(logging.DEBUG)
+if args.scenario == "warehouse":
+    root_logger.setLevel(logging.INFO)
+else:
+    root_logger.setLevel(logging.DEBUG)
 root_logger.handlers.clear()
 root_logger.addHandler(file_handler)
 
