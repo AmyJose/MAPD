@@ -53,7 +53,14 @@ def a_star(model, start, goal, other_paths, start_offset=0):
         visited.add((current, cost))
 
         if current == goal:
-            return path
+            arrival_offset = start_offset + cost
+
+            if goal_is_safe_after_arrival(
+                goal = current,
+                arrival_offset = arrival_offset, 
+                other_paths = other_paths,
+            ):
+                return path
 
         for next_cell in neighbours(current) + [current]:
             if next_cell in model.blocked_cells:
@@ -108,6 +115,17 @@ def collides_with_token(current, next_cell, next_offset, other_paths):
             return True
 
     return False
+
+def goal_is_safe_after_arrival(goal, arrival_offset, other_paths):
+    for other_path in other_paths.values():
+        if not other_path:
+            continue
+
+        for offset in range(arrival_offset, len(other_path)):
+            if get_position_at_time(other_path, offset) == goal:
+                return False
+
+    return True
 
 def get_position_at_time(path, offset):
     if offset < len(path):
@@ -370,8 +388,6 @@ class WorkerAgent(CellAgent):
             )
             return
 
-        old_cell = self.cell
-
         if len(path) > 1:
             path.pop(0)
             next_cell = path[0]
@@ -382,16 +398,18 @@ class WorkerAgent(CellAgent):
 
         logger.debug(
             f"[t={self.model.steps}] Worker {self.worker_id} MOVE "
-            f"{cell_str(old_cell)} -> {cell_str(next_cell)} | "
+            f"to {cell_str(next_cell)} | "
             f"remaining_path={path_str(path)}"
         )
-        self.update_task_progress()
 
     def request_token(self):
         self.token = self.model.token
 
     def return_token(self):
         self.token = None
+
+    def is_free(self):
+        return self.task is None
 
     def has_reached_end_of_token_path(self):
         path = self.model.token.paths.get(self.worker_id)
@@ -423,6 +441,4 @@ class WorkerAgent(CellAgent):
             self.task = None
             self.carrying = False
             self.model.completed_tasks += 1
-
-            # now the completed agent rests at its current endpoint
-            self.model.token.paths[self.worker_id] = [self.cell]
+            

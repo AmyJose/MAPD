@@ -184,7 +184,7 @@ class SpaceModel(mesa.Model):
         self.maybe_generate_task()
 
         for worker in self.workers:
-            if worker.has_reached_end_of_token_path():
+            if worker.is_free() and worker.has_reached_end_of_token_path():
                 worker.step()
 
         if self.show_display:
@@ -195,6 +195,9 @@ class SpaceModel(mesa.Model):
 
         if self.show_display:
             self.display.update()
+        
+        for worker in self.workers:
+            worker.update_task_progress()
 
         self.detect_collisions(previous_positions)
         self.datacollector.collect(self)
