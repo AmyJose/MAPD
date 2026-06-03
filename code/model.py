@@ -1,4 +1,5 @@
 import logging
+from collections import deque
 
 import mesa
 from mesa.discrete_space import OrthogonalVonNeumannGrid
@@ -77,6 +78,7 @@ class SpaceModel(mesa.Model):
 
         self.create_workers()
         self.initialise_token()
+        self.endpoint_distances = self.precompute_endpoint_distances()
 
         self.display = DisplayLayer(self)
 
@@ -130,6 +132,48 @@ class SpaceModel(mesa.Model):
     def initialise_token(self):
         for worker in self.workers:
             self.token.paths[worker.worker_id] = [worker.cell]
+
+    def precompute_endpoint_distances(self):
+        """
+        For each endpoint, compute shortest path distance from every reachable cell
+        to that endpoint, respecting blocked cells.
+
+        Returns:
+            dict: endpoint -> {cell -> distance}
+        """
+        distances = {}
+
+        for endpoint in self.endpoints:
+            distances[endpoint] = self.bfs_distances_from(endpoint)
+
+        return distances
+
+
+    def bfs_distances_from(self, start_cell):
+        distances = {start_cell: 0}
+        frontier = deque([start_cell])
+
+        while frontier:
+            current = frontier.popleft()
+
+            for neighbour in current.neighborhood:
+                if neighbour in self.blocked_cells:
+                    continue
+
+                if neighbour in distances:
+                    continue
+
+                distances[neighbour] = distances[current] + 1
+                frontier.append(neighbour)
+
+        return distances
+
+
+    def h_value(self, from_cell, endpoint):
+        """
+        Obstacle-aware shortest path distance from from_cell to endpoint.
+        """
+        return self.endpoint_distances.get(endpoint, {}).get(from_cell, float("inf"))
 
     def step(self):
         previous_positions = {

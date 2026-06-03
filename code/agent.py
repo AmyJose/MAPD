@@ -10,7 +10,7 @@ def heuristic(a, b):
     bx, by = b.coordinate
     return abs(ax-bx) + abs(ay-by)
 
-def a_star(start, goal, other_paths, start_time):
+def a_star(model, start, goal, other_paths, start_time):
     if start is None:
         raise ValueError("a_star received start=None")
 
@@ -36,6 +36,9 @@ def a_star(start, goal, other_paths, start_time):
             return path
 
         for next_cell in neighbours(current) + [current]:
+            if next_cell in model.blocked_cells:
+                continue
+
             next_time = current_time + 1
 
             if collides_with_token(
@@ -47,7 +50,11 @@ def a_star(start, goal, other_paths, start_time):
                 continue
 
             new_cost = cost + 1
-            h = heuristic(next_cell, goal)
+            h = model.h_value(next_cell, goal)
+
+            if h == float("inf"):
+                continue
+
             new_priority = new_cost + h
 
             heappush(
@@ -121,17 +128,20 @@ class WorkerAgent(CellAgent):
             smallest_h = float("inf")
             t = None
             for task in available_tasks:
-                h = heuristic(self.cell, task.pickup)
+                h = self.model.h_value(self.cell, task.pickup)
                 if h < smallest_h:
                     smallest_h = h
                     t = task
-
-            # assign this task to the agent
-            self.task = t
-            # remove the task from the task set
-            self.token.remove_task(self.task)
-            # call Path 1
-            self.path1(self.task, self.token)
+            
+            if t is None or smallest_h == float("inf"):
+                self.path2(self.token)
+            else:
+                # assign this task to the agent
+                self.task = t
+                # remove the task from the task set
+                self.token.remove_task(self.task)
+                # call Path 1
+                self.path1(self.task, self.token)
         # else if ( there is no task, so cant assign itself to a task in the current timestep)
         else:
             #no task assignment in current step
@@ -161,6 +171,7 @@ class WorkerAgent(CellAgent):
 
         #current position -> pickup
         path_to_pickup = a_star(
+            model=self.model,
             start = self.cell,
             goal = task.pickup,
             other_paths= other_paths,
@@ -174,6 +185,7 @@ class WorkerAgent(CellAgent):
 
         #drop off
         path_to_dropoff = a_star(
+            model = self.model,
             start=task.pickup,
             goal = task.dropoff,
             other_paths=other_paths,
@@ -218,6 +230,7 @@ class WorkerAgent(CellAgent):
         best_path = None
         for endpoint in safe_endpoints:
             path = a_star(
+                model = self.model,
                 start=self.cell,
                 goal=endpoint,
                 other_paths=other_paths,
