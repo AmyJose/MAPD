@@ -112,32 +112,33 @@ def build_warehouse_scenario(grid, rng):
     task_endpoints = []
     blocked_cells = set()
 
-    shelf_y_values = [3, 7, 11, 15, 19]
+    shelf_y_values = [2, 6, 10, 14, 18]
 
     for y in shelf_y_values:
-        for x in range(7, 18):
+        #finishes at 16
+        for x in range(7, 17):
             blocked_cells.add(grid[(x, y)])
 
-        for x in range(19, 30):
+        for x in range(18, 28):
             blocked_cells.add(grid[(x, y)])
 
-    endpoint_columns = [2, 4, 31, 33]
+    endpoint_columns = [1, 2, 4, 5, 29, 30, 32, 33]
 
     for x in endpoint_columns:
-        for y in range(2, 20):
+        for y in range(1, 20):
             cell = grid[(x, y)]
 
             if cell not in blocked_cells:
                 task_endpoints.append(cell)
 
-    for y in [2, 4, 6, 8, 12, 14, 16, 18]:
-        for x in range(7, 18):
+    for y in [1, 3, 5, 7, 9, 11, 13, 15, 17, 19]:
+        for x in range(7, 17):
             cell = grid[(x, y)]
 
             if cell not in blocked_cells:
                 task_endpoints.append(cell)
 
-        for x in range(19, 30):
+        for x in range(18, 28):
             cell = grid[(x, y)]
 
             if cell not in blocked_cells:
