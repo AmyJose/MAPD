@@ -12,45 +12,70 @@ from markers import (
 
 
 SCENARIO = "warehouse"
-SEED=42
-WIDTH=35
-HEIGHT=21
+SEED = 42
 
 
 def agent_portrayal(agent):
     if isinstance(agent, WorkerAgent):
-        if agent.carrying:
+        if getattr(agent, "carrying", False):
             color = "green"
         elif agent.task is not None:
             color = "blue"
         else:
             color = "grey"
 
-        return {"color": color, "size": 80, "marker": "o"}
+        return {
+            "color": color,
+            "size": 80,
+            "marker": "o",
+        }
 
     if isinstance(agent, PickupMarker):
-        return {"color": "orange", "size": 60, "marker": "s"}
+        return {
+            "color": "orange",
+            "size": 60,
+            "marker": "s",
+        }
 
     if isinstance(agent, DropoffMarker):
-        return {"color": "red", "size": 60, "marker": "X"}
+        return {
+            "color": "red",
+            "size": 60,
+            "marker": "X",
+        }
 
     if isinstance(agent, BlockedCellMarker):
-        return {"color": "black", "size": 100, "marker": "s"}
+        return {
+            "color": "black",
+            "size": 100,
+            "marker": "s",
+        }
 
     if isinstance(agent, ParkingMarker):
-        return {"color": "grey", "size": 100, "marker": "s"}
+        return {
+            "color": "lightgrey",
+            "size": 80,
+            "marker": "s",
+        }
 
     if isinstance(agent, PathMarker):
-        return {"color": "lightblue", "size": 25, "marker": "."}
+        return {
+            "color": "lightblue",
+            "size": 25,
+            "marker": ".",
+        }
 
-    return {"color": "white", "size": 20, "marker": "."}
+    return {
+        "color": "white",
+        "size": 20,
+        "marker": ".",
+    }
 
 
 model = SpaceModel(
-    width=WIDTH,
-    height=HEIGHT,
     scenario=SCENARIO,
-    seed=SEED
+    seed=SEED,
+    show_display=True,
 )
 
 space_component = make_space_component(agent_portrayal)

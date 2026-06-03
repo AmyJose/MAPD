@@ -1,34 +1,13 @@
-from dataclasses import dataclass
-
-@dataclass
-class ScenarioConfig:
-    name: str
-    width: int
-    height: int
-    num_workers: int
-    task_spawn_probability: float
-    max_tasks_waiting: int
-    start_cells: list
-    task_endpoints: list
-    resting_endpoints: list
-    blocked_cells: set
-
-    @property
-    def endpoints(self):
-        return set(self.task_endpoints) | set(self.resting_endpoints)
+from problem_instance import ProblemInstance
 
 def build_scenario(
         name,
         grid,
         rng,
-        width,
-        height,
-        num_workers,
-        num_task_endpoint,
-        blocked_spawn_probability,
-        task_spawn_probability,
-        max_tasks_waiting,
-):
+        num_workers=3,
+        num_task_endpoints=8,
+        blocked_spawn_probability=0.15,
+    ):
     if name == "standard":
         return build_standard_scenario(grid)
 
@@ -42,13 +21,9 @@ def build_scenario(
         return build_random_scenario(
             grid=grid,
             rng=rng,
-            width=width,
-            height=height,
             num_workers=num_workers,
-            num_task_endpoint=num_task_endpoint,
+            num_task_endpoints=num_task_endpoints,
             blocked_spawn_probability=blocked_spawn_probability,
-            task_spawn_probability=task_spawn_probability,
-            max_tasks_waiting=max_tasks_waiting
         )
     
     raise ValueError(f"Unknown scenario: {name}")
@@ -92,13 +67,7 @@ def build_standard_scenario(grid):
         grid[(9, 6)],
     }
 
-    return ScenarioConfig(
-        name="standard",
-        width=10,
-        height=10,
-        num_workers=3,
-        task_spawn_probability=0.2,
-        max_tasks_waiting=5,
+    return ProblemInstance(
         start_cells=start_cells,
         task_endpoints=task_endpoints,
         resting_endpoints=resting_endpoints,
@@ -129,13 +98,7 @@ def build_test_scenario(grid):
         if y != 1 and (x, y) not in {(4, 2), (4, 0)}
     }
 
-    return ScenarioConfig(
-        name="test",
-        width=5,
-        height=3,
-        num_workers=2,
-        task_spawn_probability=0.0,
-        max_tasks_waiting=2,
+    return ProblemInstance(
         start_cells=start_cells,
         task_endpoints=task_endpoints,
         resting_endpoints=resting_endpoints,
@@ -143,8 +106,6 @@ def build_test_scenario(grid):
     )
 
 def build_warehouse_scenario(grid, rng):
-    width = 35
-    height = 21
     num_workers = 50
 
     start_cells = []
@@ -190,28 +151,19 @@ def build_warehouse_scenario(grid, rng):
     # deterministic because rng is seeded by the model
     start_cells = rng.sample(resting_endpoints, num_workers)
 
-    return ScenarioConfig(
-        name="warehouse",
-        width=width,
-        height=height,
-        num_workers=num_workers,
-        task_spawn_probability=0.2,
-        max_tasks_waiting=20,
+    return ProblemInstance(
         start_cells=start_cells,
         task_endpoints=task_endpoints,
         resting_endpoints=resting_endpoints,
         blocked_cells=blocked_cells,
     )
+
 def build_random_scenario(
     grid,
     rng,
-    width,
-    height,
     num_workers,
     num_task_endpoints,
     blocked_spawn_probability,
-    task_spawn_probability,
-    max_tasks_waiting,
 ):
     start_cells = generate_random_cells(
         grid=grid,
@@ -243,13 +195,7 @@ def build_random_scenario(
         important_cells=forbidden,
     )
 
-    return ScenarioConfig(
-        name="random",
-        width=width,
-        height=height,
-        num_workers=num_workers,
-        task_spawn_probability=task_spawn_probability,
-        max_tasks_waiting=max_tasks_waiting,
+    return ProblemInstance(
         start_cells=start_cells,
         task_endpoints=task_endpoints,
         resting_endpoints=resting_endpoints,

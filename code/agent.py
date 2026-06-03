@@ -1,9 +1,7 @@
-import mesa
 from mesa.discrete_space import CellAgent
-import heapq
 from heapq import heappop, heappush
-from markers import DropoffMarker, PathMarker, PickupMarker
 import logging
+from itertools import count
 logger = logging.getLogger(__name__)
 
 #manhattan distance
@@ -13,13 +11,20 @@ def heuristic(a, b):
     return abs(ax-bx) + abs(ay-by)
 
 def a_star(start, goal, other_paths, start_time):
+    if start is None:
+        raise ValueError("a_star received start=None")
+
+    if goal is None:
+        raise ValueError("a_star received goal=None")
+    
     frontier = []
-    heapq.heappush(frontier, (0, 0, start, [start]))
+    tie_breaker = count()
+    heappush(frontier, (0, next(tie_breaker), 0, start, [start]))
 
     visited = set()
 
     while frontier:
-        priority, cost, current, path = heappop(frontier)
+        priority, _ , cost, current, path = heappop(frontier)
         current_time = start_time + cost
 
         if (current, current_time) in visited:
@@ -29,8 +34,6 @@ def a_star(start, goal, other_paths, start_time):
 
         if current == goal:
             return path
-
-        #neighbours = list(current.neighborhood)
 
         for next_cell in neighbours(current) + [current]:
             next_time = current_time + 1
@@ -44,19 +47,20 @@ def a_star(start, goal, other_paths, start_time):
                 continue
 
             new_cost = cost + 1
-            heuristic = heuristic(next_cell, goal)
-            new_priority = new_cost + heuristic
+            h = heuristic(next_cell, goal)
+            new_priority = new_cost + h
 
             heappush(
                 frontier,
                 (
                     new_priority,
+                    next(tie_breaker),
                     new_cost,
                     next_cell,
                     path + [next_cell],
                 )
             )
-    
+                
     return None
 
 def collides_with_token(current, next_cell, next_time, other_paths):
@@ -92,56 +96,9 @@ class WorkerAgent(CellAgent):
     def __init__(self, model, worker_id):
         super().__init__(model)
         self.task = None
-        #self.path = []
-        #self.carrying = False
         self.worker_id = worker_id
-        #self.path_markers = []
         self.token = None
     
-    def assign_task(self, task, path=None):
-        self.model.token.clear_worker(self)
-        self.model.token.clear_endpoint(self)
-
-        if path is None:
-            path = a_star(
-                start=self.cell,
-                goal=task.pickup,
-                start_time=self.model.steps,
-                worker=self,
-                model=self.model
-            )   
-
-        #check if a path wasnt found
-        if not path and self.cell != task.pickup:
-            logger.warning(
-                f"Worker {self.worker_id} could not find a path to pickup "
-                f"{task.pickup.coordinate}"
-            )
-            self.task = None
-            return False
-
-        self.task = task
-        self.carrying = False
-        self.path = path
-        self.create_path_markers()
-
-        pickup_marker = PickupMarker(self.model)
-        pickup_marker.move_to(self.task.pickup)
-        self.task.pickup_marker = pickup_marker
-
-        self.model.token.reserve_path(
-            worker=self,
-            path=self.path,
-            start_time=self.model.steps
-        )
-
-        logger.debug(
-            f"Worker {self.worker_id} planned pickup path: "
-            f"{[cell.coordinate for cell in self.path]}"
-        )
-
-        return True
-
     def step(self):
         #request the token
         self.request_token()
@@ -204,7 +161,7 @@ class WorkerAgent(CellAgent):
 
         #current position -> pickup
         path_to_pickup = a_star(
-            start = self.pos,
+            start = self.cell,
             goal = task.pickup,
             other_paths= other_paths,
             start_time=self.model.steps
@@ -279,264 +236,17 @@ class WorkerAgent(CellAgent):
         token.paths[self.worker_id] = best_path
 
     def move(self):
-        next_cell = self.model.token.paths[self.worker_id].pop(0)
-        self.move_to(next_cell)
-    
-    def step1(self):
-        if self.path:
-            current_cell = self.cell
-            next_cell = self.path.pop(0)
+        path = self.model.token.paths.get(self.worker_id)
 
-            occupied_by = [
-                worker.worker_id
-                for worker in self.model.workers
-                if worker is not self and worker.cell == next_cell
-            ]
+        if not path:
+            return
 
-            if occupied_by:
-                logger.warning(
-                    f"Worker {self.worker_id} blocked from moving "
-                    f"{current_cell.coordinate} -> {next_cell.coordinate}; "
-                    f"cell occupied by workers {occupied_by}"
-                )
-
-                # Put the move back so the worker can try again later
-                self.path.insert(0, next_cell)
-                logger.debug(
-                    f"Worker {self.worker_id} remaining path after block: "
-                    f"{[c.coordinate for c in self.path]}"
-                )
-
-                # Reserve current cell because the worker is waiting here
-                self.model.token.clear_worker(self)
-                self.model.token.reserve_path(
-                    worker=self,
-                    path=self.path,
-                    start_time=self.model.steps,
-                )
-
-                self.create_path_markers()
-                return
-
-            logger.debug(
-                f"Worker {self.worker_id} moving "
-                f"{current_cell.coordinate} -> {next_cell.coordinate}"
-            )
-
+        if len(path) > 1:
+            path.pop(0)
+            next_cell = path[0]
             self.move_to(next_cell)
-
-            assigned_parking = self.model.token.endpoint_assignments.get(self.worker_id)
-
-            if assigned_parking is not None and next_cell != assigned_parking:
-                self.model.token.clear_endpoint(self)
-
-            self.create_path_markers()
-            return
-        
-        if self.task is None:
-            return
-        
-        if not self.carrying and self.cell == self.task.pickup:
-            logger.info(
-                f"Worker {self.worker_id} reached pickup "
-                f"{self.task.pickup.coordinate}"
-            )
-
-            self.carrying = True
-
-            if self.task.pickup_marker is not None:
-                self.task.pickup_marker.remove()
-                self.task.pickup_marker = None
-
-            dropoff_marker = DropoffMarker(self.model)
-            dropoff_marker.move_to(self.task.dropoff)
-            self.task.dropoff_marker = dropoff_marker
-
-            self.model.token.clear_worker(self)
-
-            dropoff_path = a_star(
-                start=self.cell, 
-                goal=self.task.dropoff, 
-                start_time=self.model.steps,
-                worker=self,
-                model=self.model
-            )
-
-            if not dropoff_path and self.cell != self.task.dropoff:
-                self.carrying = True
-                self.path = []
-
-                logger.warning(
-                    f"Worker {self.worker_id} could not find path to dropoff "
-                    f"{self.task.dropoff.coordinate}; waiting at pickup "
-                    f"{self.cell.coordinate}"
-                )
-
-                parked = self.go_to_resting_endpoint()
-
-                if not parked:
-                    logger.warning(
-                        f"Worker {self.worker_id} could not park; waiting at "
-                        f"{self.cell.coordinate}"
-                    )
-
-                    self.model.token.reserve_path(
-                        worker=self,
-                        path=[],
-                        start_time=self.model.steps,
-                        goal_reserve_horizon=20,
-                    )
-                return
-
-            self.path=dropoff_path
-
-            self.model.token.reserve_path(
-                worker=self,
-                path=self.path,
-                start_time=self.model.steps
-            )
-
-            self.create_path_markers()
-            
-            logger.debug(
-                f"Worker {self.worker_id} planned path: "
-                f"{[cell.coordinate for cell in self.path]}"
-            )
-            return
-        
-        if self.carrying and self.cell == self.task.dropoff:
-            logger.info(
-                f"Worker {self.worker_id} completed task at "
-                f"{self.task.dropoff.coordinate}"
-            )
-
-            self.model.token.clear_worker(self)
-            self.clear_path_markers()
-            self.model.completed_tasks += 1
-
-            if self.task.dropoff_marker is not None:
-                self.task.dropoff_marker.remove()
-                self.task.dropoff_marker = None
-
-            self.task = None
-            self.carrying = False
-            self.path = []
-
-    #helper methods for path markers
-    def clear_path_markers(self):
-        for marker in self.path_markers:
-            marker.remove()
-
-        self.path_markers = []
-
-    def create_path_markers(self):
-        self.clear_path_markers()
-        for cell in self.path:
-            marker = PathMarker(self.model, self.worker_id)
-            marker.move_to(cell)
-            self.path_markers.append(marker)
-
-    def choose_best_task(self, tasks):
-        #use A* to determine the closest pickup location 
-        # (what if this was overall location....)
-        best_cost = float("inf")
-        best_pickup_path = None
-        best_task = None
-        for task in tasks:
-            pickup_path = a_star(
-                start=self.cell,
-                goal=task.pickup,
-                start_time=self.model.steps,
-                model=self.model,
-                worker=self
-            )
-            if not pickup_path and self.cell != task.pickup:
-                continue
-
-            pickup_arrival_time = self.model.steps + len(pickup_path)
-
-            dropoff_path = a_star(
-                start=task.pickup,
-                goal=task.dropoff,
-                start_time=pickup_arrival_time,
-                model=self.model,
-                worker=self
-            )
-            if not dropoff_path and task.pickup != task.dropoff:
-                continue
-
-            cost = len(pickup_path) + len(dropoff_path)
-
-            if cost< best_cost:
-                best_cost = cost
-                best_task = task
-                best_pickup_path = pickup_path
-        return best_task, best_pickup_path
-
-
-    def go_to_resting_endpoint(self):
-        token = self.model.token
-
-        #if already on a task, get oot
-        if self.path:
-            return False
-
-        #find the available parking spots
-        available_endpoints = [
-            cell for cell in self.model.resting_endpoints
-            if not token.is_endpoint_taken(cell, self, self.model.workers)
-        ]
-
-        if not available_endpoints:
-            logger.info(f"Worker {self.worker_id} could not find available parking")
-            return False
-        
-        best_cell = None
-        best_path = None
-        best_cost = float("inf")
-
-        #short term reserve here?
-        # but im not sure that would work as we want it
-        for endpoint in available_endpoints:
-            path = a_star(
-                start=self.cell,
-                goal=endpoint,
-                start_time=self.model.steps,
-                model=self.model,
-                worker=self
-            )
-            if not path and self.cell != endpoint:
-                continue
-
-            cost = len(path)
-
-            if cost < best_cost:
-                best_cost = cost
-                best_cell = endpoint
-                best_path = path
-        if best_cell is None:
-            logger.info(f"Worker {self.worker_id} could not path to parking")
-            return False
-        
-        token.clear_worker(self)
-        token.assign_endpoint(self, best_cell)
-
-        self.path = best_path
-
-        #this can be done concurrently. maybe need a short term "looking" reserve.
-        token.reserve_path(
-            worker=self,
-            path=self.path,
-            start_time=self.model.steps
-        )
-
-        self.create_path_markers()
-        logger.info(
-            f"Worker {self.worker_id} moving to parking "
-            f"{best_cell.coordinate}; path length={len(best_path)}"
-        )
-        return True
-
+        else:
+            self.move_to(path[0])
 
     def request_token(self):
         self.token = self.model.token

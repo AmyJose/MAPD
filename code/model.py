@@ -1,130 +1,135 @@
+import logging
+
 import mesa
 from mesa.discrete_space import OrthogonalVonNeumannGrid
+
 from agent import WorkerAgent
-from markers import ParkingMarker, BlockedCellMarker
-from system_token import SystemToken, Task
-import logging
+from display_layer import DisplayLayer
 from scenario import build_scenario
+from system_token import SystemToken, Task
 
 logger = logging.getLogger(__name__)
 
+
 class SpaceModel(mesa.Model):
-    """a model containing some number of agents that move around a grid"""
+    """MAPD model using token passing."""
+
     def __init__(
-            self,
-            width=10,
-            height=10,
-            seed=None,
-            scenario="random",
-            num_workers=3,
-            num_task_endpoints=8,
-            blocked_spawn_probability=0.15,
-            task_spawn_probability=0.2,
-            max_tasks_waiting=5,
-            show_markers=True,
-        ):
-        
+        self,
+        width=10,
+        height=10,
+        seed=None,
+        scenario="random",
+        num_workers=3,
+        num_task_endpoints=8,
+        blocked_spawn_probability=0.15,
+        task_spawn_probability=0.2,
+        max_tasks_waiting=5,
+        show_display=True,
+    ):
         super().__init__(seed=seed)
 
-        self.scenario_name = scenario
-        self.show_markers = show_markers
+        self.scenario = scenario
+        self.show_display = show_display
 
-        #for fixed size scenariod, override before creating grid
-        width, height = self.get_gris_size_for_scenario(
-            scenerio=scenario,
+        width, height = self.get_grid_size_for_scenario(
+            scenario=scenario,
             width=width,
-            height=height
+            height=height,
         )
 
         self.width = width
         self.height = height
 
         self.grid = OrthogonalVonNeumannGrid(
-            [width, height],
-            torus=False, 
-            random=self.random
+            [self.width, self.height],
+            torus=False,
+            random=self.random,
         )
+
+        self.problem = build_scenario(
+            name=scenario,
+            grid=self.grid,
+            rng=self.random,
+            num_workers=num_workers,
+            num_task_endpoints=num_task_endpoints,
+            blocked_spawn_probability=blocked_spawn_probability,
+        )
+
+        self.task_spawn_probability = task_spawn_probability
+        self.max_tasks_waiting = max_tasks_waiting
+
+        if scenario == "test":
+            self.task_spawn_probability = 0.0
+            self.max_tasks_waiting = 2
+
+        if scenario == "warehouse":
+            self.task_spawn_probability = 0.2
+            self.max_tasks_waiting = 20
 
         self.token = SystemToken()
         self.workers = []
 
-        # model counters
+        self.generated_tasks = 0
+        self.completed_tasks = 0
         self.vertex_collisions = 0
         self.edge_collisions = 0
-        self.completed_tasks = 0
-        self.generated_tasks = 0
 
-        scenario_config = build_scenario(
-            name=scenario,
-            grid=self.grid,
-            rng=self.random,
-            width=width,
-            height=height,
-            num_workers=num_workers,
-            num_task_endpoints=num_task_endpoints,
-            blocked_spawn_probability=blocked_spawn_probability,
-            task_spawn_probability=task_spawn_probability,
-            max_tasks_waiting=max_tasks_waiting,
-        )
-
-        self.apply_scenario(scenario_config)
         self.create_workers()
         self.initialise_token()
 
-        if self.show_markers:
-            self.create_static_markers()
+        self.display = DisplayLayer(self)
 
-        if self.scenario_name == "test":
+        if self.show_display:
+            self.display.create_static_markers()
+
+        if self.scenario == "test":
             self.create_test_tasks()
 
         self.datacollector = self.create_datacollector()
 
-    def get_grid_size_for_scenario(self, scenario, width, height):
+    @staticmethod
+    def get_grid_size_for_scenario(scenario, width, height):
         if scenario == "test":
             return 5, 3
-
-        if scenario == "warehouse":
-            return 35, 21
 
         if scenario == "standard":
             return 10, 10
 
+        if scenario == "warehouse":
+            return 35, 21
+
         return width, height
 
-    def apply_scenario(self, scenario_config):
-        self.width = scenario_config.width
-        self.height = scenario_config.height
-        self.num_workers = scenario_config.num_workers
-        self.task_spawn_probability = scenario_config.task_spawn_probability
-        self.max_tasks_waiting = scenario_config.max_tasks_waiting
+    @property
+    def endpoints(self):
+        return self.problem.endpoints
 
-        self.start_cells = scenario_config.start_cells
-        self.task_endpoints = scenario_config.task_endpoints
-        self.resting_endpoints = scenario_config.resting_endpoints
-        self.blocked_cells = scenario_config.blocked_cells
+    @property
+    def task_endpoints(self):
+        return self.problem.task_endpoints
 
-        self.endpoints = scenario_config.endpoints
+    @property
+    def resting_endpoints(self):
+        return self.problem.resting_endpoints
+
+    @property
+    def blocked_cells(self):
+        return self.problem.blocked_cells
+
+    @property
+    def start_cells(self):
+        return self.problem.start_cells
 
     def create_workers(self):
-        for worker_id, cell in enumerate(self.start_cells):
+        for worker_id, cell in enumerate(self.problem.start_cells):
             worker = WorkerAgent(self, worker_id=worker_id)
             worker.move_to(cell)
             self.workers.append(worker)
 
     def initialise_token(self):
-        token = self.token
-        # assign trivial paths
         for worker in self.workers:
-            token.paths[worker.worker_id] = [worker.cell]
-
-    def create_static_markers(self):
-        for cell in self.resting_endpoints:
-            marker = ParkingMarker(self)
-            marker.move_to(cell)
-
-        for cell in self.blocked_cells:
-            marker = BlockedCellMarker(self)
-            marker.move_to(cell)
+            self.token.paths[worker.worker_id] = [worker.cell]
 
     def step(self):
         previous_positions = {
@@ -137,14 +142,20 @@ class SpaceModel(mesa.Model):
         for worker in self.workers:
             worker.step()
 
+        if self.show_display:
+            self.display.update()
+
         for worker in self.workers:
             worker.move()
+
+        if self.show_display:
+            self.display.update()
 
         self.detect_collisions(previous_positions)
         self.datacollector.collect(self)
 
     def maybe_generate_task(self):
-        if self.scenario_name == "test":
+        if self.scenario == "test":
             return
 
         if len(self.token.tasks) >= self.max_tasks_waiting:
@@ -153,11 +164,11 @@ class SpaceModel(mesa.Model):
         if self.random.random() > self.task_spawn_probability:
             return
 
-        pickup = self.random.choice(self.task_endpoints)
-        dropoff = self.random.choice(self.task_endpoints)
+        pickup = self.random.choice(list(self.problem.task_endpoints))
+        dropoff = self.random.choice(list(self.problem.task_endpoints))
 
         while dropoff == pickup:
-            dropoff = self.random.choice(self.task_endpoints)
+            dropoff = self.random.choice(list(self.problem.task_endpoints))
 
         task = Task(
             pickup=pickup,
@@ -201,7 +212,11 @@ class SpaceModel(mesa.Model):
         for cell, workers in occupied.items():
             if len(workers) > 1:
                 self.vertex_collisions += 1
-                worker_ids = [worker.worker_id for worker in workers]
+
+                worker_ids = [
+                    worker.worker_id
+                    for worker in workers
+                ]
 
                 logger.warning(
                     f"[t={self.steps}] Vertex collision at "
@@ -254,16 +269,28 @@ class SpaceModel(mesa.Model):
                 "Vertex Collisions": "vertex_collisions",
                 "Edge Collisions": "edge_collisions",
                 "Active Workers": lambda m: sum(
-                    worker.task is not None for worker in m.workers
+                    worker.task is not None
+                    for worker in m.workers
                 ),
                 "Idle Workers": lambda m: sum(
-                    worker.task is None for worker in m.workers
+                    worker.task is None
+                    for worker in m.workers
                 ),
             },
             agent_reporters={
                 "Agent Type": lambda a: type(a).__name__,
                 "Worker ID": lambda a: getattr(a, "worker_id", None),
+                "Carrying": lambda a: getattr(a, "carrying", None),
                 "Has Task": lambda a: getattr(a, "task", None) is not None,
-                "Cell": lambda a: a.cell.coordinate if a.cell else None,
+                "Cell": lambda a: (
+                    a.cell.coordinate
+                    if getattr(a, "cell", None)
+                    else None
+                ),
+                "Token Path Length": lambda a: (
+                    len(a.model.token.paths.get(a.worker_id, []))
+                    if hasattr(a, "worker_id")
+                    else None
+                ),
             },
         )
