@@ -437,8 +437,7 @@ class WorkerAgent(CellAgent):
                 f"[t={self.model.steps}] Worker {self.worker_id} completed task "
                 f"{task_str(self.task)}"
             )
-
+            self.model.completed_tasks += 1
             self.task = None
             self.carrying = False
-            self.model.completed_tasks += 1
             

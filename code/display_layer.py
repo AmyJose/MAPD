@@ -5,6 +5,8 @@ from markers import (
     PickupMarker,
     DropoffMarker,
 )
+import logging
+logger = logging.getLogger(__name__)
 
 
 class DisplayLayer:
@@ -38,11 +40,19 @@ class DisplayLayer:
     def update_task_markers(self):
         self.clear_markers(self.task_markers)
 
-        for task in self.model.token.tasks:
-            pickup_marker = PickupMarker(self.model)
-            pickup_marker.move_to(task.pickup)
-            self.task_markers.append(pickup_marker)
+        for worker in self.model.workers:
+            task = worker.task
 
+            if task is None:
+                continue
+
+            # If worker has not picked it up yet, show pickup.
+            if not worker.carrying:
+                pickup_marker = PickupMarker(self.model)
+                pickup_marker.move_to(task.pickup)
+                self.task_markers.append(pickup_marker)
+
+            # Always show dropoff while task is assigned.
             dropoff_marker = DropoffMarker(self.model)
             dropoff_marker.move_to(task.dropoff)
             self.task_markers.append(dropoff_marker)
@@ -59,4 +69,3 @@ class DisplayLayer:
                 marker = PathMarker(self.model, worker_id)
                 marker.move_to(cell)
                 self.path_markers.append(marker)
-                
