@@ -4,11 +4,22 @@ from datetime import datetime
 import logging
 import argparse
 
+class IgnoreMesaRegistrationLogs(logging.Filter):
+    def filter(self, record):
+        message = record.getMessage().lower()
+
+        ignored_phrases = [
+            "registered",
+            "deregistered",
+        ]
+
+        return not any(phrase in message for phrase in ignored_phrases)
+
 parser = argparse.ArgumentParser(description="Run the MAPD toy model")
 
 parser.add_argument(
     "--scenario",
-    choices=["random", "standard", "test"],
+    choices=["random", "standard", "test", "warehouse"],
     default="random",
     help="Choose whether to run a random world or the fixed standard test world",
 )
@@ -47,12 +58,19 @@ timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 output_dir = Path("results") / timestamp
 output_dir.mkdir(parents=True, exist_ok=True)
 
-logging.basicConfig(
-    filename=output_dir / "simulation.log",
-    filemode="w",
-    level=logging.DEBUG,
-    format="%(asctime)s | %(levelname)s | %(message)s",
+log_file = output_dir / "simulation.log"
+
+file_handler = logging.FileHandler(log_file, mode="w")
+file_handler.setLevel(logging.DEBUG)
+file_handler.setFormatter(
+    logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
 )
+file_handler.addFilter(IgnoreMesaRegistrationLogs())
+
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.DEBUG)
+root_logger.handlers.clear()
+root_logger.addHandler(file_handler)
 
 model = SpaceModel(
     width=args.width,

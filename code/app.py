@@ -11,10 +11,10 @@ from markers import (
 )
 
 
-SCENARIO = "standard"
+SCENARIO = "warehouse"
 SEED=42
-WIDTH=10
-HEIGHT=10
+WIDTH=35
+HEIGHT=21
 
 
 def agent_portrayal(agent):

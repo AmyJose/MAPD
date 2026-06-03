@@ -6,8 +6,8 @@ logger = logging.getLogger(__name__)
 #what a task is:
 @dataclass
 class Task:
-    pickup: tuple[int, int]
-    dropoff: tuple [int,int]
+    pickup: object
+    dropoff: object
     pickup_marker: object = None
     dropoff_marker: object = None
 
@@ -15,11 +15,12 @@ class Task:
 class SystemToken:
     def __init__(self):
         self.tasks = []
-        self.assignments = {}
+        #self.assignments = {}
         self.paths = {}
-        self.reserved_cells = {}
-        self.reserved_edges = {}
-        self.parking_assignments = {}
+        #self.reserved_cells = {}
+        #self.reserved_edges = {}
+        #self.endpoint_assignments = {}
+        
 
     def add_task(self, task):
         self.tasks.append(task)
@@ -29,6 +30,13 @@ class SystemToken:
             f"Waiting tasks={len(self.tasks)}"
         )
 
+    def remove_task(self, task):
+        self.tasks.remove(task)
+        logger.info(
+            f"Token removed task: "
+            f"{task.pickup.coordinate} -> {task.dropoff.coordinate}."
+        )
+
     def assign_task(self, worker, task):
         self.assignments[worker.worker_id] = task
         logger.info(
@@ -36,15 +44,16 @@ class SystemToken:
             f"{task.pickup.coordinate} -> {task.dropoff.coordinate}"
         )
 
-    def assign_parking(self, worker, parking_cell):
-        self.parking_assignments[worker.worker_id] = parking_cell
+    def assign_endpoint(self, worker, endpoint_cell):
+        self.endpoint_assignments[worker.worker_id] = endpoint_cell
 
         logger.info(
-            f"Token assigned parking {parking_cell.coordinate} "
+            f"Token assigned endpoint {endpoint_cell.coordinate} "
             f"to worker {worker.worker_id}"
         )
-    def clear_parking(self, worker):
-        self.parking_assignments.pop(worker.worker_id, None)
+
+    def clear_endpoint(self, worker):
+        self.endpoint_assignments.pop(worker.worker_id, None)
 
     def reserve_path(self, worker, path, start_time, goal_reserve_horizon=2):
         worker_id = worker.worker_id
@@ -115,7 +124,7 @@ class SystemToken:
             return True
 
         #dont path through another workers assigned parking cell
-        for parked_worker_id, parking_cell in self.parking_assignments.items():
+        for parked_worker_id, parking_cell in self.endpoint_assignments.items():
             if parked_worker_id !=worker_id and parking_cell == cell:
                 logger.debug(
                     f"Token cell conflict: cell {parking_cell.coordinate} "
@@ -126,17 +135,17 @@ class SystemToken:
 
         return False
         
-    def is_parking_taken(self, parking_cell, worker=None, workers=None):
+    def is_endpoint_taken(self, endpoint_cell, worker=None, workers=None):
         worker_id = worker.worker_id if worker is not None else None
 
-        for assigned_worker_id, assigned_cell in self.parking_assignments.items():
-            if assigned_worker_id != worker_id and assigned_cell == parking_cell:
+        for assigned_worker_id, assigned_cell in self.endpoint_assignments.items():
+            if assigned_worker_id != worker_id and assigned_cell == endpoint_cell:
                 return True
             
         #check actual current worker positions
         if workers is not None:
             for other_worker in workers:
-                if other_worker is not worker and other_worker.cell == parking_cell:
+                if other_worker is not worker and other_worker.cell == endpoint_cell:
                     return True
         return False
 
@@ -168,15 +177,15 @@ class SystemToken:
             if key[2] >= current_time
         }
 
-    def refresh_parking_reservations(self, workers, current_time, horizon=5):
+    def refresh_endpoint_reservations(self, workers, current_time, horizon=5):
         for worker in workers:
-            parking_cell = self.parking_assignments.get(worker.worker_id)
+            endpoint_cell = self.endpoint_assignments.get(worker.worker_id)
 
-            if parking_cell is None:
+            if endpoint_cell is None:
                 continue
 
             for t in range(current_time, current_time + horizon + 1):
-                self.reserved_cells[(parking_cell, t)] = worker.worker_id
+                self.reserved_cells[(endpoint_cell, t)] = worker.worker_id
 
     
     
