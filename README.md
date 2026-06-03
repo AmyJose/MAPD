@@ -1,41 +1,47 @@
 # MAPD Toy Model
 
-A small Python/Mesa project exploring the foundations of Multi-Agent Pickup and Delivery (MAPD).
+A Python/Mesa implementation of the Token Passing (TP) algorithm for Multi-Agent Pickup and Delivery (MAPD), based on the work of Ma et al. [1].
 
-This project implements a dynamic grid-based multi-agent environment where workers are assigned pickup and drop-off tasks generated during simulation runtime. Agents use **space-time aware A\*** search to navigate an orthogonal Von Neumann grid while interacting with dynamically generated tasks, randomly generated obstacle layouts, and token-managed reservations.
+The project explores how decentralised agents can coordinate pickup and delivery tasks using a shared token containing task assignments and collision-free paths. Agents request the token when they become free, select tasks using TP's heuristic task selection strategy, and plan space-time aware paths that avoid conflicts with paths already stored in the token.
 
-The project is being developed incrementally towards a full MAPF/MAPD implementation inspired by Token Passing approaches.
-
+This project is an educational and research-oriented implementation and is not intended to be a complete reproduction of the original TP algorithm. Some preprocessing steps and theoretical guarantees described in the paper are still under development.
 
 # Features
 
 - Mesa-based agent simulation
-- `CellAgent` implementation
-- `OrthogonalVonNeumannGrid`
-- Space-time aware A\* pathfinding
-- Multiple independent worker agents
-- Dynamic runtime task generation
-- Shared system token for:
-  - task storage
-  - worker-task assignments
-  - planned paths
-  - cell reservations
-  - edge reservations
-  - parking assignments
-- Closest-completion-cost task selection
-- Token-managed parking behaviour for idle workers
-- Parking reservation refreshing
-- Reservation cleanup for old timesteps
-- Random obstacle generation
-- Connectivity validation for starts, task endpoints, and parking cells
-- Browser visualisation using Mesa SolaraViz
-- Dynamic pickup/drop-off visualisation
-- Planned path visualisation
-- Vertex and edge-swap collision detection
-- Worker ID tracking
-- Simulation metrics collection using Mesa `DataCollector`
-- Timestamped simulation result exporting
-- File-based logging and debugging support
+- Orthogonal Von Neumann grid environment
+- Space-time aware A* planning
+- Shared Token Passing coordination
+- Dynamic pickup and delivery task generation
+- Task selection using estimated completion cost
+- Path1 implementation
+- Path2 implementation
+- Endpoint-based warehouse environments
+- Multiple configurable scenarios
+- Deterministic execution via random seeds
+- Browser visualisation using SolaraViz
+- Collision detection and debugging tools
+- Simulation metrics collection
+- Timestamped experiment logging
+
+# Scenarios
+
+The simulation supports multiple predefined scenarios:
+
+| Scenario | Description |
+|-----------|-------------|
+| random | Randomly generated environment |
+| test | Small deterministic debugging environment |
+| standard | Structured MAPD benchmark environment |
+| warehouse | Warehouse-style endpoint layout inspired by MAPD literature |
+
+Scenarios define:
+
+- grid dimensions
+- worker count
+- endpoint locations
+- blocked cells
+- task generation locations
 
 # Running the Simulation
 
@@ -60,10 +66,12 @@ The browser interface displays:
 - planned agent paths
 - live agent movement
 
+![Snip of Simulation](docs/simulation_snip.png)
+
 ## Console Mode
 
 ```bash
-python code/run.py
+python code/run.py --scenario warehouse --seed 42 --steps 500
 ```
 # Results and Logging
 
@@ -90,97 +98,46 @@ Logging currently includes:
 
 # How It Works
 
-The environment is represented as a 2D orthogonal Von Neumann grid, meaning agents can move in four directions:
+The implementation follows the Token Passing (TP) algorithm.
 
-- up
-- down
-- left
-- right
+The token stores:
 
-Each task contains:
+- active tasks
+- planned paths for each worker
 
-```text
-pickup
-dropoff
-```
+When a worker reaches the end of its path and becomes free, it requests the token.
 
-Tasks are generated dynamically during runtime and stored inside a shared system token.
+The worker:
 
-Idle workers request the token. If tasks are available, workers evaluate reachable tasks using estimated full completion cost:
+1. Selects an available task whose pickup and delivery locations are not currently occupied by the endpoint of another token path.
+2. Uses Path1 to plan a collision-free path via the pickup location to the delivery location.
+3. Updates its token path.
+4. Releases the token.
 
-```text
-cost = path to pickup + path from pickup to drop-off
-```
+If no suitable task exists, the worker executes Path2 and plans a path to a safe resting endpoint.
 
-The worker claims the task with the lowest estimated completion cost, plans a path to the pickup location, and records its assignment and reservations in the token.
-
-If no suitable task is available, the worker moves to a token-managed parking cell. Parking cells are assigned through the token to avoid multiple idle workers selecting the same parking location.
-
-The planner reasons over both:
-
-- spatial position
-- timestep
-
-Workers reserve:
-
-- future occupied cells
-- traversed edges
-- temporary goal occupancy
-- assigned parking cells
-
-Old reservations are periodically cleared, while parking reservations are refreshed to keep parked workers protected.
-
-# Collision Detection and Reservations
-
-The simulation currently detects:
-
-- vertex collisions
-- edge-swap collisions
-
-The reservation system is used to reduce future conflicts during path planning. Workers check reserved cells, reserved edges, and occupied parking cells before expanding future A\* states.
-
-The reservation system is still experimental and does not yet fully guarantee collision-free execution.
+Workers then execute their token paths until reaching the end, at which point they may request the token again.
 
 # Current Limitations
 
-This is still an early MAPD implementation. The current implementation includes:
+The implementation is currently a research prototype.
 
-- multiple agents
-- dynamic task generation
-- token-based task ownership
-- token-managed parking
-- independent space-time A\* planning
-- reservation-table infrastructure
-- browser visualisation
-- collision detection
-- simulation data collection
-- logging/debugging support
+Known limitations include:
 
-The following limitations still exist:
+- occasional collision bugs still exist
+- heuristic preprocessing from the TP paper is not yet implemented
+- blocked-cell-aware endpoint distance tables are not yet precomputed
+- no performance optimisation
+- limited benchmark environments
+- limited validation against published MAPD benchmarks
 
-- collision avoidance is not yet fully reliable
-- no cooperative replanning
-- no prioritised planning
-- token passing is still partial/incomplete
-- no advanced task allocation strategy beyond estimated completion cost
-- agents may still occupy the same cell simultaneously
-- agents may still perform edge swaps
-- planning is currently decentralised and greedy
-
-# Future Work
-
-Planned extensions include:
-
-- robust collision avoidance
-- prioritised planning
-- full Token Passing implementation
-- cooperative pathfinding
-- rolling horizon planning
-- smarter task allocation strategies
-- congestion visualisation
-- reservation visualisation
-- MAPF/MAPD algorithm comparison
-- performance benchmarking
+## Future Work
+- Endpoint distance preprocessing
+- Full TP completeness validation
+- Comparison against Cooperative A*
+- Comparison against reservation-table approaches
+- MAPD benchmark reproduction
+- Performance evaluation
 
 
 # Motivation
@@ -203,3 +160,11 @@ The project is intended as a learning exercise in:
 - multi-agent systems
 - cooperative planning
 - MAPF/MAPD research concepts
+
+# References
+
+[1] Ma, G., Hönig, W., Kumar, T. K. S., & Koenig, S. (2017).
+*Lifelong Multi-Agent Path Finding for Online Pickup and Delivery Tasks*.
+Proceedings of the 16th International Conference on Autonomous Agents and MultiAgent Systems (AAMAS 2017), 837–845.
+
+Available at: https://www.ifaamas.org/Proceedings/aamas2017/pdfs/p837.pdf 

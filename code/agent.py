@@ -1,9 +1,28 @@
-import mesa
 from mesa.discrete_space import CellAgent
-import heapq
-from markers import DropoffMarker, PathMarker, PickupMarker
+from heapq import heappop, heappush
 import logging
+from itertools import count
 logger = logging.getLogger(__name__)
+
+#---------------------helper functions for debug-----------------------
+def cell_str(cell):
+    if cell is None:
+        return "None"
+    return str(cell.coordinate)
+
+
+def path_str(path):
+    if not path:
+        return "[]"
+    return " -> ".join(cell_str(cell) for cell in path)
+
+
+def task_str(task):
+    if task is None:
+        return "None"
+    return f"{cell_str(task.pickup)} -> {cell_str(task.dropoff)}"
+
+#-----------------------------------------------------------------------
 
 #manhattan distance
 def heuristic(a, b):
@@ -11,361 +30,414 @@ def heuristic(a, b):
     bx, by = b.coordinate
     return abs(ax-bx) + abs(ay-by)
 
-#a star function for shortest path finding between two points
-# now changed to also care about TIME: what is the shortest route that is free at each timestep
-def a_star(start, goal, start_time, model, worker, max_time=100):
-    frontier = []
-    heapq.heappush(frontier, (0, start.coordinate, start_time, start))
+def a_star(model, start, goal, other_paths, start_offset=0):
+    if start is None:
+        raise ValueError("a_star received start=None")
 
-    #dictionarys for lookup
-    came_from = {(start, start_time): None}
-    current_cost = {(start, start_time): 0}
+    if goal is None:
+        raise ValueError("a_star received goal=None")
+    
+    frontier = []
+    tie_breaker = count()
+    heappush(frontier, (0, next(tie_breaker), 0, start, [start]))
+
+    visited = set()
 
     while frontier:
-        _, _, current_time, current_cell = heapq.heappop(frontier)
+        priority, _ , cost, current, path = heappop(frontier)
+        #current_time = start_time + cost
 
-        if current_cell == goal:
-            break
-
-        if current_time - start_time >= max_time:
+        if (current, cost) in visited:
             continue
 
-        neighbours = list(current_cell.neighborhood)
-        # WAIT action -> adding in the current cell as an option
-        neighbours.append(current_cell)
+        visited.add((current, cost))
 
-        for next_cell in neighbours:
-            next_time = current_time + 1
+        if current == goal:
+            arrival_offset = start_offset + cost
 
+            if goal_is_safe_after_arrival(
+                goal = current,
+                arrival_offset = arrival_offset, 
+                other_paths = other_paths,
+            ):
+                return path
+
+        for next_cell in neighbours(current) + [current]:
             if next_cell in model.blocked_cells:
                 continue
 
-            if model.token.is_cell_reserved(next_cell, next_time, worker):
-                logger.debug(
-                    f"Worker {worker.worker_id} rejected "
-                    f"{next_cell.coordinate} at t={next_time}; "
-                )
+            next_offset = start_offset + cost + 1
+
+            if collides_with_token(
+                current=current,
+                next_cell=next_cell,
+                next_offset=next_offset,
+                other_paths=other_paths
+            ):
                 continue
 
-            if model.token.would_swap_edges(current_cell, next_cell, next_time, worker):
-                logger.debug(
-                    f"Worker {worker.worker_id} rejected edge swap "
-                    f"{current_cell.coordinate} -> {next_cell.coordinate} "
-                )
+            new_cost = cost + 1
+            h = model.h_value(next_cell, goal)
+
+            if h == float("inf"):
                 continue
 
-            state = (next_cell, next_time)
-            new_cost = current_cost[(current_cell, current_time)] + 1
+            new_priority = new_cost + h
 
-            if state not in current_cost or new_cost < current_cost[state]:
-                current_cost[state] = new_cost
+            heappush(
+                frontier,
+                (
+                    new_priority,
+                    next(tie_breaker),
+                    new_cost,
+                    next_cell,
+                    path + [next_cell],
+                )
+            )
+                
+    return None
 
-                priority = new_cost +  heuristic(next_cell, goal)
+def collides_with_token(current, next_cell, next_offset, other_paths):
+    for other_path in other_paths.values():
+        if not other_path:
+            continue
 
-                heapq.heappush(frontier, (priority, next_cell.coordinate, next_time, next_cell))
-                came_from[state] = (current_cell, current_time)
+        # after an agent reaches the end of its path, treat it as staying there
+        other_current = get_position_at_time(other_path, next_offset - 1)
+        other_next = get_position_at_time(other_path, next_offset)
 
-    #states where the final entry is one that reaches the goal
-    goal_states = [
-        state for state in came_from
-        if state[0] == goal
-    ]
+        # vertex collision
+        if next_cell == other_next:
+            return True
 
-    if not goal_states:
-        return []
+        # edge swap collision
+        if current == other_next and next_cell == other_current:
+            return True
+
+    return False
+
+def goal_is_safe_after_arrival(goal, arrival_offset, other_paths):
+    for other_path in other_paths.values():
+        if not other_path:
+            continue
+
+        for offset in range(arrival_offset, len(other_path)):
+            if get_position_at_time(other_path, offset) == goal:
+                return False
+
+    return True
+
+def get_position_at_time(path, offset):
+    if offset < len(path):
+        return path[offset]
     
-    #which is the best state?
-    # the shortest one!
-    best_goal_state = min(goal_states, key=lambda state: state[1])
-    
-    path = []
-    current_state = best_goal_state
+    return path[-1]
 
-    while current_state != (start, start_time):
-        cell, _ = current_state
-        path.append(cell)
-        current_state = came_from[current_state]
-    
-    path.reverse()
-    return path
-
+def neighbours(cell):
+    return list(cell.neighborhood)
 
 class WorkerAgent(CellAgent):
     """An agent that can move around a grid"""
     def __init__(self, model, worker_id):
         super().__init__(model)
         self.task = None
-        self.path = []
-        self.carrying = False
         self.worker_id = worker_id
-        self.path_markers = []
+        self.token = None
+        self.carrying=False
     
-    def assign_task(self, task, path=None):
-        self.model.token.clear_worker(self)
-        self.model.token.clear_parking(self)
+    def step(self):
+        #request the token
+        self.request_token()
+        logger.debug(
+            f"[t={self.model.steps}] Worker {self.worker_id} STEP START "
+            f"at {cell_str(self.cell)} | "
+            f"task={task_str(self.task)} | "
+            f"token_tasks={len(self.token.tasks)} | "
+            f"current_token_path={path_str(self.token.paths.get(self.worker_id))}"
+        )   
 
-        if path is None:
-            path = a_star(
-                start=self.cell,
-                goal=task.pickup,
-                start_time=self.model.steps,
-                worker=self,
-                model=self.model
-            )   
+        #choose a task from the task set such that no path of other agents in the token ends in the pickup or delivery location of the task
+        # e.g., available task set = tasks w no current paths to pickup or dropoff in token
+        available_tasks = []
 
-        #check if a path wasnt found
-        if not path and self.cell != task.pickup:
-            logger.warning(
-                f"Worker {self.worker_id} could not find a path to pickup "
-                f"{task.pickup.coordinate}"
-            )
-            self.task = None
-            return False
-
-        self.task = task
-        self.carrying = False
-        self.path = path
-        self.create_path_markers()
-
-        pickup_marker = PickupMarker(self.model)
-        pickup_marker.move_to(self.task.pickup)
-        self.task.pickup_marker = pickup_marker
-
-        self.model.token.reserve_path(
-            worker=self,
-            path=self.path,
-            start_time=self.model.steps
-        )
+        endpoints = {
+            path[-1]
+            for worker_id, path in self.token.paths.items()
+            if worker_id != self.worker_id and path
+        }
 
         logger.debug(
-            f"Worker {self.worker_id} planned pickup path: "
-            f"{[cell.coordinate for cell in self.path]}"
+            f"[t={self.model.steps}] Worker {self.worker_id} sees occupied endpoints: "
+            f"{[cell_str(cell) for cell in endpoints]}"
         )
-
-        return True
-
-    def step(self):
-        if self.path:
-            current_cell = self.cell
-            next_cell = self.path.pop(0)
+        
+        for task in self.token.tasks:
+            task_available = (
+                task.pickup not in endpoints
+                and task.dropoff not in endpoints
+            )
 
             logger.debug(
-                f"Worker {self.worker_id} moving "
-                f"{current_cell.coordinate} -> {next_cell.coordinate}"
+                f"[t={self.model.steps}] Worker {self.worker_id} checking task "
+                f"{task_str(task)} | available={task_available}"
             )
 
-            self.move_to(next_cell)
-            self.create_path_markers()
-            return
-        
-        if self.task is None:
-            return
-        
-        if not self.carrying and self.cell == self.task.pickup:
-            logger.info(
-                f"Worker {self.worker_id} reached pickup "
-                f"{self.task.pickup.coordinate}"
-            )
+            if task_available:
+                available_tasks.append(task)
 
-            self.carrying = True
+        logger.debug(
+            f"[t={self.model.steps}] Worker {self.worker_id} available_tasks="
+            f"{[task_str(task) for task in available_tasks]}"
+        )
 
-            if self.task.pickup_marker is not None:
-                self.task.pickup_marker.remove()
-                self.task.pickup_marker = None
-
-            dropoff_marker = DropoffMarker(self.model)
-            dropoff_marker.move_to(self.task.dropoff)
-            self.task.dropoff_marker = dropoff_marker
-
-            self.model.token.clear_worker(self)
-
-            self.path = a_star(
-                start=self.cell, 
-                goal=self.task.dropoff, 
-                start_time=self.model.steps,
-                worker=self,
-                model=self.model
-            )
-
-            self.model.token.reserve_path(
-                worker=self,
-                path=self.path,
-                start_time=self.model.steps
-            )
-
-            self.create_path_markers()
+        # if available tasks is not empty
+        if available_tasks:
+            #pick a task with the smallest h- value from current location to pickup location
+            smallest_h = float("inf")
+            t = None
+            for task in available_tasks:
+                h = self.model.h_value(self.cell, task.pickup)
+                logger.debug(
+                    f"[t={self.model.steps}] Worker {self.worker_id} h-value to task "
+                    f"{task_str(task)} = {h}"
+                )
+                if h < smallest_h:
+                    smallest_h = h
+                    t = task
+            
+            if t is None or smallest_h == float("inf"):
+                logger.debug(
+                    f"[t={self.model.steps}] Worker {self.worker_id} found available tasks "
+                    f"but none reachable. Calling Path2."
+                )
+                self.path2(self.token)
+            else:
+                logger.info(
+                    f"[t={self.model.steps}] Worker {self.worker_id} selected task "
+                    f"{task_str(t)} with h={smallest_h}"
+                )
+                # assign this task to the agent
+                self.task = t
+                # remove the task from the task set
+                self.token.remove_task(self.task)
+                # call Path 1
+                path = self.path1(self.task, self.token)
+                if path is None:
+                    logger.warning(
+                        f"[t={self.model.steps}] Worker {self.worker_id} Path1 FAILED "
+                        f"for task {task_str(self.task)}"
+                    )
+                else:
+                    logger.info(
+                        f"[t={self.model.steps}] Worker {self.worker_id} Path1 SUCCESS | "
+                        f"path_len={len(path)} | path={path_str(path)}"
+                    )
+        # else if ( there is no task, so cant assign itself to a task in the current timestep)
+        else:
+            #no task assignment in current step
+            no_task_ends_here = all(task.dropoff != self.cell for task in self.token.tasks)
             
             logger.debug(
-                f"Worker {self.worker_id} planned path: "
-                f"{[cell.coordinate for cell in self.path]}"
+                f"[t={self.model.steps}] Worker {self.worker_id} has no available task. "
+                f"no_task_ends_here={no_task_ends_here}"
             )
-            return
+            # if the agent is not in the delivery location of a task in the task set
+            if no_task_ends_here:
+                # update path in token with trivial path where it rests in its current location
+                self.token.paths[self.worker_id] = [self.cell]
+                logger.debug(
+                    f"[t={self.model.steps}] Worker {self.worker_id} using trivial path "
+                    f"at {cell_str(self.cell)}"
+                )
+            #else (to avoid deadlocks)
+            else:
+                logger.info(
+                    f"[t={self.model.steps}] Worker {self.worker_id} is blocking a task "
+                    f"dropoff. Calling Path2."
+                )
+                # call Path 2:
+                path = self.path2(self.token)
+
+                if path is None:
+                    logger.warning(
+                        f"[t={self.model.steps}] Worker {self.worker_id} Path2 FAILED"
+                    )
+                else:
+                    logger.info(
+                        f"[t={self.model.steps}] Worker {self.worker_id} Path2 SUCCESS | "
+                        f"path_len={len(path)} | path={path_str(path)}"
+                    )
+        # return token
+        logger.debug(
+            f"[t={self.model.steps}] Worker {self.worker_id} STEP END | "
+            f"new_token_path={path_str(self.token.paths.get(self.worker_id))}"
+        )
+        self.return_token()
+
+    
+    def path1(self, task, token):
+        #path 1 : updates its path in the token w cost minimal path that
+            # 1. moves from its current location via the pickup location to the delivery location
+            # 2. does not collide with the paths of other agents stored in the token
         
-        if self.carrying and self.cell == self.task.dropoff:
-            logger.info(
-                f"Worker {self.worker_id} completed task at "
-                f"{self.task.dropoff.coordinate}"
+        other_paths = {
+            worker_id : path
+            for worker_id, path in token.paths.items()
+            if worker_id != self.worker_id
+        }
+
+        #current position -> pickup
+        path_to_pickup = a_star(
+            model=self.model,
+            start = self.cell,
+            goal = task.pickup,
+            other_paths= other_paths,
+        )
+
+        if path_to_pickup is None:
+            logger.warning(
+                f"[t={self.model.steps}] Worker {self.worker_id} Path1 failed: "
+                f"no path to pickup {cell_str(task.pickup)}"
             )
+            return None
+        
+        pickup_arrival_time = len(path_to_pickup) - 1
 
-            self.model.token.clear_worker(self)
-            self.clear_path_markers()
-            self.model.completed_tasks += 1
+        #drop off
+        path_to_dropoff = a_star(
+            model = self.model,
+            start=task.pickup,
+            goal = task.dropoff,
+            other_paths=other_paths,
+            start_offset=pickup_arrival_time,
+        )
 
-            if self.task.dropoff_marker is not None:
-                self.task.dropoff_marker.remove()
-                self.task.dropoff_marker = None
-
-            self.task = None
-            self.carrying = False
-            self.path = []
-
-    #helper methods for path markers
-    def clear_path_markers(self):
-        for marker in self.path_markers:
-            marker.remove()
-
-        self.path_markers = []
-
-    def create_path_markers(self):
-        self.clear_path_markers()
-        for cell in self.path:
-            marker = PathMarker(self.model, self.worker_id)
-            marker.move_to(cell)
-            self.path_markers.append(marker)
-
-    def choose_best_task(self, tasks):
-        #use A* to determine the closest pickup location 
-        # (what if this was overall location....)
-        best_cost = float("inf")
-        best_pickup_path = None
-        best_task = None
-        for task in tasks:
-            pickup_path = a_star(
-                start=self.cell,
-                goal=task.pickup,
-                start_time=self.model.steps,
-                model=self.model,
-                worker=self
+        if path_to_dropoff is None:
+            logger.warning(
+                f"[t={self.model.steps}] Worker {self.worker_id} Path1 failed: "
+                f"no path from pickup {cell_str(task.pickup)} "
+                f"to dropoff {cell_str(task.dropoff)}"
             )
-            if not pickup_path and self.cell != task.pickup:
-                continue
+            return None
+        
+        full_path = path_to_pickup + path_to_dropoff[1:]
 
-            pickup_arrival_time = self.model.steps + len(pickup_path)
+        #update the token
+        token.paths[self.worker_id] = full_path
+        return full_path
 
-            dropoff_path = a_star(
-                start=task.pickup,
-                goal=task.dropoff,
-                start_time=pickup_arrival_time,
-                model=self.model,
-                worker=self
-            )
-            if not dropoff_path and task.pickup != task.dropoff:
-                continue
+    def path2(self, token):
+        #path 2: update its path in the token with a cost-minimal path that
+            # 1. moves from its current location to an endpoint such that the delivery locations of all tasks in task set are different from the chosen endpoint
+            #   and no other path of other agents in the token ends in the chosen endpoint
+            # 2. does not collide with the paths of other agents stored in the token
 
-            cost = len(pickup_path) + len(dropoff_path)
-
-            if cost< best_cost:
-                best_cost = cost
-                best_task = task
-                best_pickup_path = pickup_path
-        return best_task, best_pickup_path
-
-
-    def go_to_parking(self):
-        token = self.model.token
-
-        #if already on a task, get oot
-        if self.path:
-            return False
-
-        #find the available parking spots
-        available_parking = [
-            cell for cell in self.model.parking_cells
-            if not token.is_parking_taken(cell, self)
+        other_paths = {
+            worker_id : path
+            for worker_id, path in token.paths.items()
+            if worker_id != self.worker_id
+        }
+        task_dropoffs = {
+            task.dropoff
+            for task in token.tasks
+        }
+        occupied_endpoints = {
+            path[-1]
+            for path in other_paths.values()
+            if path
+        }
+        safe_endpoints = [
+            endpoint
+            for endpoint in self.model.endpoints
+            if endpoint not in task_dropoffs
+            and endpoint not in occupied_endpoints
         ]
 
-        if not available_parking:
-            logger.info(f"Worker {self.worker_id} could not find available parking")
-            return False
-        
-        best_cell = None
         best_path = None
-        best_cost = float("inf")
 
-        #short term reserve here?
-        # but im not sure that would work as we want it
-        for parking_cell in available_parking:
+        logger.debug(
+            f"[t={self.model.steps}] Worker {self.worker_id} Path2 safe_endpoints="
+            f"{[cell_str(endpoint) for endpoint in safe_endpoints]}"
+        )
+        for endpoint in safe_endpoints:
             path = a_star(
+                model = self.model,
                 start=self.cell,
-                goal=parking_cell,
-                start_time=self.model.steps,
-                model=self.model,
-                worker=self
+                goal=endpoint,
+                other_paths=other_paths,
             )
-            if not path and self.cell != parking_cell:
+
+            if path is None:
                 continue
 
-            cost = len(path)
-
-            if cost < best_cost:
-                best_cost = cost
-                best_cell = parking_cell
+            if best_path is None or len(path) < len(best_path):
                 best_path = path
-        if best_cell is None:
-            logger.info(f"Worker {self.worker_id} could not path to parking")
-            return False
-        
-        token.clear_worker(self)
-        token.assign_parking(self, best_cell)
+            
+        if best_path is None:
+            return None
 
-        self.task = None
-        self.carrying = False
-        self.path = best_path
+        token.paths[self.worker_id] = best_path
+        return best_path
 
-        #this can be done concurrently. maybe need a short term "looking" reserve.
-        token.reserve_path(
-            worker=self,
-            path=self.path,
-            start_time=self.model.steps
+    def move(self):
+        path = self.model.token.paths.get(self.worker_id)
+
+        if not path:
+            logger.warning(
+                f"[t={self.model.steps}] Worker {self.worker_id} has no path to move"
+            )
+            return
+
+        if len(path) > 1:
+            path.pop(0)
+            next_cell = path[0]
+        else:
+            next_cell = path[0]
+
+        self.move_to(next_cell)
+
+        logger.debug(
+            f"[t={self.model.steps}] Worker {self.worker_id} MOVE "
+            f"to {cell_str(next_cell)} | "
+            f"remaining_path={path_str(path)}"
         )
-
-        self.create_path_markers()
-        logger.info(
-            f"Worker {self.worker_id} moving to parking "
-            f"{best_cell.coordinate}; path length={len(best_path)}"
-        )
-        return True
-
 
     def request_token(self):
-        token = self.model.token
+        self.token = self.model.token
 
-        if not token.tasks:
-            self.go_to_parking()
-            return
+    def return_token(self):
+        self.token = None
+
+    def is_free(self):
+        return self.task is None
+
+    def has_reached_end_of_token_path(self):
+        path = self.model.token.paths.get(self.worker_id)
+
+        if not path:
+            return True
         
-        #make this smarter!
-        task , path= self.choose_best_task(token.tasks)
-
-        if task is None:
-            logger.info(
-                f"Worker {self.worker_id} could not find any reachable task"
-            )
-            self.go_to_parking()
+        return len(path) <= 1
+    
+    def update_task_progress(self):
+        if self.task is None:
+            self.carrying = False
             return
-        
-        token.tasks.remove(task)
 
-        success = self.assign_task(task, path=path)
+        if not self.carrying and self.cell == self.task.pickup:
+            self.carrying = True
 
-        if success:
-            #record in token that it is a success
-            token.assign_task(self, task)
             logger.info(
-                f"Worker {self.worker_id} claimed closest task: "
-                f"{task.pickup.coordinate} -> {task.dropoff.coordinate}; "
-                f"pickup path length={len(path)}"
+                f"[t={self.model.steps}] Worker {self.worker_id} picked up task "
+                f"{task_str(self.task)}"
             )
-        else:
-            #add it back in
-            token.tasks.append(task)
+
+        if self.carrying and self.cell == self.task.dropoff:
+            logger.info(
+                f"[t={self.model.steps}] Worker {self.worker_id} completed task "
+                f"{task_str(self.task)}"
+            )
+            self.model.completed_tasks += 1
+            self.task = None
+            self.carrying = False
+            
