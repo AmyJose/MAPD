@@ -184,7 +184,8 @@ class SpaceModel(mesa.Model):
         self.maybe_generate_task()
 
         for worker in self.workers:
-            worker.step()
+            if worker.has_reached_end_of_token_path():
+                worker.step()
 
         if self.show_display:
             self.display.update()

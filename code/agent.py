@@ -392,3 +392,11 @@ class WorkerAgent(CellAgent):
 
     def return_token(self):
         self.token = None
+
+    def has_reached_end_of_token_path(self):
+        path = self.model.token.paths.get(self.worker_id)
+
+        if not path:
+            return True
+        
+        return len(path) <= 1
