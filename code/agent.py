@@ -30,7 +30,7 @@ def heuristic(a, b):
     bx, by = b.coordinate
     return abs(ax-bx) + abs(ay-by)
 
-def a_star(model, start, goal, other_paths, start_time):
+def a_star(model, start, goal, other_paths, start_offset=0):
     if start is None:
         raise ValueError("a_star received start=None")
 
@@ -45,12 +45,12 @@ def a_star(model, start, goal, other_paths, start_time):
 
     while frontier:
         priority, _ , cost, current, path = heappop(frontier)
-        current_time = start_time + cost
+        #current_time = start_time + cost
 
-        if (current, current_time) in visited:
+        if (current, cost) in visited:
             continue
 
-        visited.add((current, current_time))
+        visited.add((current, cost))
 
         if current == goal:
             return path
@@ -59,12 +59,12 @@ def a_star(model, start, goal, other_paths, start_time):
             if next_cell in model.blocked_cells:
                 continue
 
-            next_time = current_time + 1
+            next_offset = start_offset + cost + 1
 
             if collides_with_token(
                 current=current,
                 next_cell=next_cell,
-                next_time=next_time,
+                next_offset=next_offset,
                 other_paths=other_paths
             ):
                 continue
@@ -90,14 +90,14 @@ def a_star(model, start, goal, other_paths, start_time):
                 
     return None
 
-def collides_with_token(current, next_cell, next_time, other_paths):
+def collides_with_token(current, next_cell, next_offset, other_paths):
     for other_path in other_paths.values():
         if not other_path:
             continue
 
         # after an agent reaches the end of its path, treat it as staying there
-        other_current = get_position_at_time(other_path, next_time - 1)
-        other_next = get_position_at_time(other_path, next_time)
+        other_current = get_position_at_time(other_path, next_offset - 1)
+        other_next = get_position_at_time(other_path, next_offset)
 
         # vertex collision
         if next_cell == other_next:
@@ -109,9 +109,9 @@ def collides_with_token(current, next_cell, next_time, other_paths):
 
     return False
 
-def get_position_at_time(path, time):
-    if time < len(path):
-        return path[time]
+def get_position_at_time(path, offset):
+    if offset < len(path):
+        return path[offset]
     
     return path[-1]
 
@@ -273,7 +273,6 @@ class WorkerAgent(CellAgent):
             start = self.cell,
             goal = task.pickup,
             other_paths= other_paths,
-            start_time=self.model.steps
         )
 
         if path_to_pickup is None:
@@ -283,7 +282,7 @@ class WorkerAgent(CellAgent):
             )
             return None
         
-        pickup_arrival_time = self.model.steps + len(path_to_pickup) - 1
+        pickup_arrival_time = len(path_to_pickup) - 1
 
         #drop off
         path_to_dropoff = a_star(
@@ -291,7 +290,7 @@ class WorkerAgent(CellAgent):
             start=task.pickup,
             goal = task.dropoff,
             other_paths=other_paths,
-            start_time=pickup_arrival_time,
+            start_offset=pickup_arrival_time,
         )
 
         if path_to_dropoff is None:
@@ -347,7 +346,6 @@ class WorkerAgent(CellAgent):
                 start=self.cell,
                 goal=endpoint,
                 other_paths=other_paths,
-                start_time=self.model.steps
             )
 
             if path is None:
