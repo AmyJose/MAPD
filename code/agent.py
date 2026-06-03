@@ -125,6 +125,7 @@ class WorkerAgent(CellAgent):
         self.task = None
         self.worker_id = worker_id
         self.token = None
+        self.carrying=False
     
     def step(self):
         #request the token
@@ -384,6 +385,7 @@ class WorkerAgent(CellAgent):
             f"{cell_str(old_cell)} -> {cell_str(next_cell)} | "
             f"remaining_path={path_str(path)}"
         )
+        self.update_task_progress()
 
     def request_token(self):
         self.token = self.model.token
@@ -398,3 +400,29 @@ class WorkerAgent(CellAgent):
             return True
         
         return len(path) <= 1
+    
+    def update_task_progress(self):
+        if self.task is None:
+            self.carrying = False
+            return
+
+        if not self.carrying and self.cell == self.task.pickup:
+            self.carrying = True
+
+            logger.info(
+                f"[t={self.model.steps}] Worker {self.worker_id} picked up task "
+                f"{task_str(self.task)}"
+            )
+
+        if self.carrying and self.cell == self.task.dropoff:
+            logger.info(
+                f"[t={self.model.steps}] Worker {self.worker_id} completed task "
+                f"{task_str(self.task)}"
+            )
+
+            self.task = None
+            self.carrying = False
+            self.model.completed_tasks += 1
+
+            # now the completed agent rests at its current endpoint
+            self.model.token.paths[self.worker_id] = [self.cell]
