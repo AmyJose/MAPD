@@ -108,7 +108,6 @@ def build_test_scenario(grid):
 def build_warehouse_scenario(grid, rng):
     num_workers = 50
 
-    start_cells = []
     task_endpoints = []
     blocked_cells = set()
 
@@ -122,15 +121,16 @@ def build_warehouse_scenario(grid, rng):
         for x in range(18, 28):
             blocked_cells.add(grid[(x, y)])
 
-    endpoint_columns = [1, 2, 4, 5, 29, 30, 32, 33]
+    side_endpoint_columns = [1, 2, 4, 5, 29, 30, 32, 33]
 
-    for x in endpoint_columns:
+    for x in side_endpoint_columns:
         for y in range(1, 20):
             cell = grid[(x, y)]
 
             if cell not in blocked_cells:
                 task_endpoints.append(cell)
 
+    # all shelf adjacent cells -> task endpoits
     for y in [1, 3, 5, 7, 9, 11, 13, 15, 17, 19]:
         for x in range(7, 17):
             cell = grid[(x, y)]
@@ -146,11 +146,29 @@ def build_warehouse_scenario(grid, rng):
 
     task_endpoints = remove_duplicates(task_endpoints)
 
-    resting_endpoints = list(task_endpoints)
+    possible_start_cells = []
 
-    # start cells are chosen from endpoints
-    # deterministic because rng is seeded by the model
-    start_cells = rng.sample(resting_endpoints, num_workers)
+    for x in side_endpoint_columns:
+        for y in range(1, 20):
+            cell = grid[(x, y)]
+
+            if cell not in blocked_cells:
+                possible_start_cells.append(cell)
+
+    possible_start_cells = remove_duplicates(possible_start_cells)
+
+    start_cells = rng.sample(possible_start_cells, num_workers)
+
+    #cells where agentrs tart become non task endpoints
+    start_cell_set = set(start_cells)
+
+    task_endpoints = [
+        cell
+        for cell in task_endpoints
+        if cell not in start_cell_set
+    ]
+
+    resting_endpoints = start_cells
 
     return ProblemInstance(
         start_cells=start_cells,

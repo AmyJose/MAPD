@@ -16,7 +16,8 @@ from markers import (
     DropoffMarker,
     BlockedCellMarker,
     PathMarker,
-    ParkingMarker,
+    RestingEndpointMarker,
+    TaskEndpointMarker,
 )
 
 
@@ -43,11 +44,19 @@ def agent_portrayal(agent):
             ("zorder", 1),
         )
 
-    elif isinstance(agent, ParkingMarker):
+    elif isinstance(agent, TaskEndpointMarker):
         portrayal.update(
             ("color", "lightgrey"),
             ("marker", "s"),
-            ("size", 30),
+            ("size", 80),
+            ("zorder", 2),
+        )
+    
+    elif isinstance(agent, RestingEndpointMarker):
+        portrayal.update(
+            ("color", "white"),
+            ("marker", "s"),
+            ("size", 80),
             ("zorder", 2),
         )
 

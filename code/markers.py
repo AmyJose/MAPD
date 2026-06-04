@@ -19,6 +19,10 @@ class PathMarker(CellAgent):
     def step(self):
         pass
 
-class ParkingMarker(CellAgent):
+class RestingEndpointMarker(CellAgent):
+    def step(self):
+        pass
+
+class TaskEndpointMarker(CellAgent):
     def step(self):
         pass
