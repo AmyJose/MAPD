@@ -32,8 +32,16 @@ The simulation supports multiple predefined scenarios:
 |-----------|-------------|
 | random | Randomly generated environment |
 | test | Small deterministic debugging environment |
-| standard | Structured MAPD benchmark environment |
 | warehouse | Warehouse-style endpoint layout inspired by MAPD literature |
+
+All scenarios follow the MAPD endpoint model described in the TP paper:
+
+- task endpoints are valid pickup and delivery locations
+- resting endpoints are locations where idle agents may wait
+- initial agent locations are resting endpoints
+- task endpoints and resting endpoints are disjoint
+- blocked cells never overlap with endpoints
+- all endpoints remain mutually reachable
 
 Scenarios define:
 
