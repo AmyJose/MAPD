@@ -15,7 +15,7 @@ parser = argparse.ArgumentParser(description="Run the MAPD toy model")
 
 parser.add_argument(
     "--scenario",
-    choices=["random", "standard", "test", "warehouse"],
+    choices=["random", "test", "warehouse"],
     default="random",
 )
 

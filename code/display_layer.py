@@ -1,11 +1,13 @@
 from markers import (
-    ParkingMarker,
+    RestingEndpointMarker,
+    TaskEndpointMarker,
     BlockedCellMarker,
     PathMarker,
     PickupMarker,
     DropoffMarker,
 )
 import logging
+
 logger = logging.getLogger(__name__)
 
 
@@ -17,11 +19,19 @@ class DisplayLayer:
         self.task_markers = []
 
     def create_static_markers(self):
-        for cell in self.model.resting_endpoints:
-            marker = ParkingMarker(self.model)
+        # grey task endpoint squares
+        for cell in self.model.task_endpoints:
+            marker = TaskEndpointMarker(self.model)
             marker.move_to(cell)
             self.static_markers.append(marker)
 
+        # resting endpoints
+        for cell in self.model.resting_endpoints:
+            marker = RestingEndpointMarker(self.model)
+            marker.move_to(cell)
+            self.static_markers.append(marker)
+
+        # blocked shelves
         for cell in self.model.blocked_cells:
             marker = BlockedCellMarker(self.model)
             marker.move_to(cell)
@@ -46,13 +56,11 @@ class DisplayLayer:
             if task is None:
                 continue
 
-            # If worker has not picked it up yet, show pickup.
             if not worker.carrying:
                 pickup_marker = PickupMarker(self.model)
                 pickup_marker.move_to(task.pickup)
                 self.task_markers.append(pickup_marker)
 
-            # Always show dropoff while task is assigned.
             dropoff_marker = DropoffMarker(self.model)
             dropoff_marker.move_to(task.dropoff)
             self.task_markers.append(dropoff_marker)
@@ -64,7 +72,6 @@ class DisplayLayer:
             if not path:
                 continue
 
-            # skip first cell because that is usually the worker's current cell
             for cell in path[1:]:
                 marker = PathMarker(self.model, worker_id)
                 marker.move_to(cell)
