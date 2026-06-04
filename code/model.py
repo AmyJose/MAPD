@@ -95,9 +95,6 @@ class SpaceModel(mesa.Model):
         if scenario == "test":
             return 5, 3
 
-        if scenario == "standard":
-            return 10, 10
-
         if scenario == "warehouse":
             return 35, 21
 

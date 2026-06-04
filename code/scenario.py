@@ -8,17 +8,15 @@ def build_scenario(
         num_task_endpoints=8,
         blocked_spawn_probability=0.15,
     ):
-    if name == "standard":
-        return build_standard_scenario(grid)
 
     if name == "test":
-        return build_test_scenario(grid)
+        problem= build_test_scenario(grid, rng)
     
-    if name == "warehouse":
-        return build_warehouse_scenario(grid, rng)
+    elif name == "warehouse":
+        problem= build_warehouse_scenario(grid, rng)
     
-    if name == "random":
-        return build_random_scenario(
+    elif name == "random":
+        problem= build_random_scenario(
             grid=grid,
             rng=rng,
             num_workers=num_workers,
@@ -26,77 +24,36 @@ def build_scenario(
             blocked_spawn_probability=blocked_spawn_probability,
         )
     
-    raise ValueError(f"Unknown scenario: {name}")
+    else : 
+        raise ValueError(f"Unknown scenario: {name}")
 
-def build_standard_scenario(grid):
-    start_cells = [
-        grid[(0, 0)],
-        grid[(5, 0)],
-        grid[(9, 0)],
-    ]
+    validate_problem_instance(problem, num_workers=len(problem.start_cells))
+
+    return problem
+
+
+def build_test_scenario(grid, rng, num_workers=2):
+    blocked_cells = set()
 
     task_endpoints = [
+        grid[(0, 1)],
+        grid[(4, 1)],
+    ]
+
+    resting_endpoints = [
+        grid[(1, 1)],
         grid[(2, 0)],
-        grid[(1, 4)],
-        grid[(0, 8)],
-        grid[(1, 9)],
-        grid[(5, 7)],
-        grid[(8, 4)],
-        grid[(9, 4)],
-        grid[(8, 8)],
-    ]
-
-    resting_endpoints = [
-        grid[(3, 9)],
-        grid[(4, 9)],
-        grid[(5, 9)],
-    ]
-
-    blocked_cells = {
-        grid[(2, 3)],
-        grid[(2, 4)],
-        grid[(3, 3)],
-        grid[(3, 4)],
-        grid[(7, 1)],
-        grid[(0, 6)],
-        grid[(1, 6)],
-        grid[(2, 6)],
-        grid[(8, 5)],
-        grid[(8, 6)],
-        grid[(9, 5)],
-        grid[(9, 6)],
-    }
-
-    return ProblemInstance(
-        start_cells=start_cells,
-        task_endpoints=task_endpoints,
-        resting_endpoints=resting_endpoints,
-        blocked_cells=blocked_cells,
-    )
-
-def build_test_scenario(grid):
-    start_cells = [
-        grid[(0, 1)],
-        grid[(4, 1)],
-    ]
-
-    task_endpoints = [
-        grid[(0, 1)],
-        grid[(4, 1)],
-    ]
-
-    resting_endpoints = [
-        grid[(4, 2)],
         grid[(2, 2)],
-        grid[(4, 0)],
+        grid[(3, 1)],
     ]
 
-    blocked_cells = {
-        grid[(x, y)]
-        for x in range(5)
-        for y in range(3)
-        if y != 1 and (x, y) not in {(4, 2), (4, 0)}
-    }
+    if num_workers > len(resting_endpoints):
+        raise ValueError(
+            f"Test scenario only has {len(resting_endpoints)} resting endpoints, "
+            f"but {num_workers} workers were requested."
+        )
+
+    start_cells = resting_endpoints[:num_workers]
 
     return ProblemInstance(
         start_cells=start_cells,
@@ -184,34 +141,29 @@ def build_random_scenario(
     num_task_endpoints,
     blocked_spawn_probability,
 ):
-    start_cells = generate_random_cells(
+    resting_endpoints = generate_random_cells(
         grid=grid,
         rng=rng,
         count=num_workers,
     )
+
+    start_cells = list(resting_endpoints)
 
     task_endpoints = generate_random_cells(
         grid=grid,
         rng=rng,
         count=num_task_endpoints,
-        forbidden=set(start_cells),
+        forbidden=set(resting_endpoints),
     )
 
-    resting_endpoints = generate_random_cells(
-        grid=grid,
-        rng=rng,
-        count=num_workers,
-        forbidden=set(start_cells) | set(task_endpoints),
-    )
-
-    forbidden = set(start_cells) | set(task_endpoints) | set(resting_endpoints)
+    endpoints = set(resting_endpoints) | set(task_endpoints)
 
     blocked_cells = generate_valid_blocked_cells(
         grid=grid,
         rng=rng,
         blocked_spawn_probability=blocked_spawn_probability,
-        forbidden=forbidden,
-        important_cells=forbidden,
+        forbidden=endpoints,
+        important_cells=endpoints,
     )
 
     return ProblemInstance(
@@ -220,7 +172,6 @@ def build_random_scenario(
         resting_endpoints=resting_endpoints,
         blocked_cells=blocked_cells,
     )
-
 
 def generate_random_cells(grid, rng, count, forbidden=None):
     forbidden = forbidden or set()
@@ -321,3 +272,51 @@ def remove_duplicates(cells):
         result.append(cell)
 
     return result
+
+def validate_problem_instance(problem, num_workers):
+    task_endpoints = set(problem.task_endpoints)
+    resting_endpoints = set(problem.resting_endpoints)
+    start_cells = set(problem.start_cells)
+    blocked_cells = set(problem.blocked_cells)
+    endpoints = set(problem.endpoints)
+
+    if len(problem.start_cells) != num_workers:
+        raise ValueError(
+            f"Expected {num_workers} start cells, got {len(problem.start_cells)}."
+        )
+
+    if len(start_cells) != len(problem.start_cells):
+        raise ValueError("Start cells must be unique.")
+
+    if not start_cells.issubset(resting_endpoints):
+        raise ValueError("All start cells must also be resting endpoints.")
+
+    if not task_endpoints.isdisjoint(resting_endpoints):
+        overlap = task_endpoints & resting_endpoints
+        raise ValueError(
+            f"Task endpoints and resting endpoints must be disjoint. "
+            f"Overlap: {[cell.coordinate for cell in overlap]}"
+        )
+
+    if blocked_cells & task_endpoints:
+        raise ValueError("Blocked cells cannot also be task endpoints.")
+
+    if blocked_cells & resting_endpoints:
+        raise ValueError("Blocked cells cannot also be resting endpoints.")
+
+    if blocked_cells & start_cells:
+        raise ValueError("Blocked cells cannot also be start cells.")
+
+    if len(task_endpoints) < 2:
+        raise ValueError("At least two task endpoints are required.")
+
+    if len(resting_endpoints) < num_workers:
+        raise ValueError(
+            f"Need at least {num_workers} resting endpoints, "
+            f"got {len(resting_endpoints)}."
+        )
+
+    if endpoints != task_endpoints | resting_endpoints:
+        raise ValueError(
+            "problem.endpoints must equal task_endpoints + resting_endpoints."
+        )

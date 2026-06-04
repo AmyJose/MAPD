@@ -146,7 +146,7 @@ model_params = {
     "scenario": {
         "type": "Select",
         "value": SCENARIO,
-        "values": ["random", "standard", "test", "warehouse"],
+        "values": ["random", "test", "warehouse"],
         "label": "Scenario",
     },
     "seed": {
